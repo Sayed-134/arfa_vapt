@@ -1,0 +1,17 @@
+reports-output/*
+*.db
+*.log
+
+# Build artifacts
+/arfa
+/test-target
+
+# Local payload database
+/payloads-database/
+
+# Local scan outputs
+/reports-output/
+
+# Local databases/logs
+*.db
+*.log

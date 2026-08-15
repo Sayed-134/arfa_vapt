@@ -1,0 +1,79 @@
+package main
+
+import (
+	"arfa/pkg/db"
+	"arfa/pkg/detectors"
+	"arfa/pkg/report"
+	"arfa/pkg/scanner"
+	"context"
+	"flag"
+	"fmt"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+func main() {
+	var target, payloadDir, out, mode string
+	var workers int
+	var rate float64
+	var pages int
+	var authorized, verbose, preflightOnly, skipPreflight bool
+	flag.StringVar(&target, "target", "", "authorized target URL")
+	flag.StringVar(&payloadDir, "payload-dir", "./payloads-database/PayloadsAllTheThings-master", "Payload repository root")
+	flag.StringVar(&out, "out", "./reports-output", "report directory")
+	flag.StringVar(&mode, "mode", "standard", "quick|standard|deep")
+	flag.IntVar(&workers, "workers", 10, "worker count")
+	flag.Float64Var(&rate, "rate", 10, "starting requests/sec")
+	flag.IntVar(&pages, "max-pages", 30, "crawler page limit")
+	flag.BoolVar(&authorized, "i-have-authorization", false, "required acknowledgement for active scanning")
+	flag.BoolVar(&verbose, "verbose", false, "verbose logging")
+	flag.BoolVar(&preflightOnly, "preflight-only", false, "run reachability checks and do not scan")
+	flag.BoolVar(&skipPreflight, "skip-preflight", false, "skip reachability checks (not recommended)")
+	flag.Parse()
+	if !authorized {
+		log.Fatal("Refusing active scan: pass -i-have-authorization for an authorized target")
+	}
+	if target == "" {
+		log.Fatal("-target is required")
+	}
+	if err := os.MkdirAll(out, 0755); err != nil {
+		log.Fatal(err)
+	}
+	var m scanner.Mode
+	switch strings.ToLower(mode) {
+	case "quick":
+		m = scanner.Quick
+	case "deep":
+		m = scanner.Deep
+	default:
+		m = scanner.Standard
+	}
+	reg := detectors.NewRegistry(detectors.XSS{}, detectors.SQLi{}, detectors.LFI{}, detectors.RCE{}, detectors.SSTI{}, detectors.SSRF{}, detectors.XXE{}, detectors.CRLF{}, detectors.Redirect{})
+	s := scanner.New(scanner.Config{Workers: workers, Rate: rate, Timeout: 12 * time.Second, Mode: m, MaxPages: pages, Verbose: verbose, PreflightOnly: preflightOnly, SkipPreflight: skipPreflight}, reg)
+	if !preflightOnly {
+		if err := s.LoadPayloads(payloadDir); err != nil {
+			log.Fatal(err)
+		}
+		s.LogStats()
+	}
+	r, err := s.Scan(context.Background(), target)
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Printf("Reachability: %s (%s) | Findings: %d | Requests: %d | Duration: %d ms | Adaptive budget: %d/%d\n", r.Reachability.Status, r.Reachability.Reason, len(r.Findings), r.Stats.Requests, r.Stats.DurationMS, r.Stats.AdaptiveBudget, workers)
+	if err := report.JSON(filepath.Join(out, "scan_results.json"), r); err != nil {
+		log.Fatal(err)
+	}
+	if err := report.HTML(filepath.Join(out, "scan_report.html"), r); err != nil {
+		log.Fatal(err)
+	}
+	if st, err := db.Open(filepath.Join(out, "scan_history.json")); err == nil {
+		_ = st.Save(r)
+	}
+	if r.Reachability.Status != "reachable" && !skipPreflight {
+		os.Exit(3)
+	}
+}
