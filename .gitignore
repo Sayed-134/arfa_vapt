@@ -15,3 +15,9 @@ reports-output/*
 # Local databases/logs
 *.db
 *.log
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
