@@ -20,9 +20,12 @@ class ConfidenceLevel(str, Enum):
 
 class VerificationStatus(str, Enum):
     CONFIRMED = "CONFIRMED"
+    LIKELY = "LIKELY"
     PROBABLE = "PROBABLE"
     POTENTIAL = "POTENTIAL"
     UNVERIFIED = "UNVERIFIED"
+    FALSE_POSITIVE = "FALSE_POSITIVE"
+    INCONCLUSIVE = "INCONCLUSIVE"
 
 
 class FindingStatus(str, Enum):

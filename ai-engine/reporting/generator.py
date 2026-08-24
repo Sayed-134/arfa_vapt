@@ -13,6 +13,7 @@ from schemas.report import (
     ReportMetadata,
     ExecutiveSummary,
     RiskDistribution,
+    ScanEnvelope,
 )
 
 from llm.client import LLMClient
@@ -129,6 +130,7 @@ class ReportGenerator:
         deduplicated_findings: List[NormalizedFinding],
         correlated_endpoints: List[CorrelatedEndpoint],
         attack_chains: List[AttackChain],
+        source_scan: Optional[ScanEnvelope] = None,
     ) -> FinalReport:
         dist = self._build_risk_distribution(deduplicated_findings)
 
@@ -167,4 +169,5 @@ class ReportGenerator:
             correlated_endpoints=correlated_endpoints,
             attack_chains=attack_chains,
             findings=deduplicated_findings,
+            source_scan=source_scan,
         )

@@ -1,0 +1,20 @@
+{
+  "schema_version": "arfa.scan/v1",
+  "target": "http://127.0.0.1:18080",
+  "scope": {
+    "authorized": true,
+    "authorization_method": "cli_acknowledgement",
+    "authorized_at": "2026-08-22T19:55:26Z"
+  },
+  "started_at": "2026-08-22T19:55:26Z",
+  "mode": "quick",
+  "reachability": {"status": "reachable", "reason": "target reachable"},
+  "stats": {"pages": 4, "endpoints": 3, "parameters": 3, "requests": 1111, "errors": 0, "duration_ms": 1351},
+  "findings": [
+    {"id":"baseline-sqli","category":"SQLi","name":"SQL Injection","severity":"Critical","cvss":"9.8","confidence":"High","endpoint":"http://127.0.0.1:18080/sqli?id=1","parameter":"id","payload":"'","evidence":"Database error signature correlated with injected input","status":200,"verification_status":"CONFIRMED"},
+    {"id":"baseline-xss","category":"XSS","name":"Reflected Cross-Site Scripting","severity":"High","cvss":"8.2","confidence":"Medium","endpoint":"http://127.0.0.1:18080/xss?q=test","parameter":"q","payload":"<script>alert(1)</script>","evidence":"Payload reflected in response; context requires verification","status":200,"verification_status":"CONFIRMED"},
+    {"id":"baseline-lfi","category":"LFI","name":"Local File Inclusion","severity":"High","cvss":"7.5","confidence":"High","endpoint":"http://127.0.0.1:18080/lfi?file=test","parameter":"file","payload":"../../etc/passwd","evidence":"File-content marker correlated with injected input","status":200,"verification_status":"CONFIRMED"},
+    {"id":"baseline-fp","category":"XSS","name":"Reflected Cross-Site Scripting","severity":"High","cvss":"8.2","confidence":"Medium","endpoint":"http://127.0.0.1:18080/xss?static=1","parameter":"static","payload":"control","evidence":"static marker","status":200,"verification_status":"FALSE_POSITIVE"},
+    {"id":"baseline-inc","category":"SSRF","name":"Server-Side Request Forgery","severity":"High","cvss":"8.0","confidence":"Medium","endpoint":"http://127.0.0.1:18080/fetch?url=test","parameter":"url","payload":"http://example.invalid","evidence":"verification timed out","status":0,"verification_status":"INCONCLUSIVE"}
+  ]
+}

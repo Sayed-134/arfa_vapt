@@ -37,6 +37,7 @@ type Config struct {
 	Verbose       bool
 	PreflightOnly bool
 	SkipPreflight bool
+	Scope         models.ScanScope
 }
 
 type Scanner struct {
@@ -76,7 +77,7 @@ func (s *Scanner) LoadPayloads(root string) error {
 
 func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, error) {
 	start := time.Now()
-	result := models.ScanResult{Target: target, StartedAt: start.UTC().Format(time.RFC3339), Mode: string(s.cfg.Mode)}
+	result := models.ScanResult{SchemaVersion: "arfa.scan/v1", Target: target, Scope: s.cfg.Scope, StartedAt: start.UTC().Format(time.RFC3339), Mode: string(s.cfg.Mode)}
 
 	if !s.cfg.SkipPreflight {
 		pf := preflight.Run(ctx, target, preflight.DefaultConfig())

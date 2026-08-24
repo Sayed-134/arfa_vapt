@@ -23,9 +23,12 @@ CONFIDENCE_WEIGHTS = {
 
 VERIFICATION_MULTIPLIERS = {
     VerificationStatus.CONFIRMED: 1.0,
+    VerificationStatus.LIKELY: 0.8,
     VerificationStatus.PROBABLE: 0.8,
     VerificationStatus.POTENTIAL: 0.6,
     VerificationStatus.UNVERIFIED: 0.4,
+    VerificationStatus.INCONCLUSIVE: 0.3,
+    VerificationStatus.FALSE_POSITIVE: 0.0,
 }
 
 

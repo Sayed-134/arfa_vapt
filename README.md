@@ -2,6 +2,12 @@
 
 A Go-based authorized web vulnerability scanning core. This version stabilizes the scan pipeline before AI/Web3/Burp integrations.
 
+## Configuration and result contract
+
+`configs/default.conf` is loaded by default. Use `-config path/to/file` to select another key=value file; explicit CLI flags always override the file. Supported keys are `mode`, `workers`, `rate`, `max_pages`, and `timeout_seconds`.
+
+Scanner output is a versioned `arfa.scan/v1` envelope. It preserves the target, authorization acknowledgement record, reachability, statistics, and all finding verification statuses for the Python engine.
+
 ## Pipeline
 Crawler → Endpoint/Parameter model → detector-specific payloads → adaptive scheduler/rate limiter → HTTP probe → detector → deduplication → JSON/HTML report.
 

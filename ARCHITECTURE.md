@@ -4,6 +4,8 @@
 
 Target → Crawler → canonical Endpoint model → detector-specific payload scheduling → adaptive rate limiter → HTTP probe → detector → evidence check → deduplication → JSON/HTML/history.
 
+The JSON boundary is a versioned `ScanEnvelope` (`schema_version: arfa.scan/v1`). The Go scanner emits scope/authorization, reachability, stats, and findings without replacing the original verification status. The Python engine preserves this envelope as `source_scan` in its final report.
+
 ## Design rules
 
 - The supplied PayloadsAllTheThings repository is the source of truth; no replacement payload database is used.

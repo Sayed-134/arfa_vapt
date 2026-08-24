@@ -54,13 +54,21 @@ type Finding struct {
 }
 
 type ScanStats struct {
-	Pages           int   `json:"pages"`
-	AdaptiveBudget  int   `json:"adaptive_budget,omitempty"`
-	Endpoints  int   `json:"endpoints"`
-	Parameters int   `json:"parameters"`
-	Requests   int64 `json:"requests"`
-	Errors     int64 `json:"errors"`
-	DurationMS int64 `json:"duration_ms"`
+	Pages          int   `json:"pages"`
+	AdaptiveBudget int   `json:"adaptive_budget,omitempty"`
+	Endpoints      int   `json:"endpoints"`
+	Parameters     int   `json:"parameters"`
+	Requests       int64 `json:"requests"`
+	Errors         int64 `json:"errors"`
+	DurationMS     int64 `json:"duration_ms"`
+}
+
+// ScanScope is an auditable record of the explicit authorization decision.
+// It contains no inferred claim about target ownership or legal permission.
+type ScanScope struct {
+	Authorized          bool   `json:"authorized"`
+	AuthorizationMethod string `json:"authorization_method"`
+	AuthorizedAt        string `json:"authorized_at"`
 }
 
 type ReachabilityCheck struct {
@@ -78,11 +86,18 @@ type Reachability struct {
 	Checks      []ReachabilityCheck `json:"checks,omitempty"`
 }
 
-type ScanResult struct {
-	Target       string       `json:"target"`
-	StartedAt    string       `json:"started_at"`
-	Mode         string       `json:"mode"`
-	Reachability Reachability `json:"reachability"`
-	Stats        ScanStats    `json:"stats"`
-	Findings     []Finding    `json:"findings"`
+// ScanEnvelope is the versioned, cross-language result contract. Fields from
+// the v2 baseline remain additive and stable for existing consumers.
+type ScanEnvelope struct {
+	SchemaVersion string       `json:"schema_version"`
+	Target        string       `json:"target"`
+	Scope         ScanScope    `json:"scope"`
+	StartedAt     string       `json:"started_at"`
+	Mode          string       `json:"mode"`
+	Reachability  Reachability `json:"reachability"`
+	Stats         ScanStats    `json:"stats"`
+	Findings      []Finding    `json:"findings"`
 }
+
+// ScanResult remains an alias for source compatibility with the v2 baseline.
+type ScanResult = ScanEnvelope

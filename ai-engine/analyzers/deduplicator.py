@@ -26,9 +26,12 @@ CONFIDENCE_ORDER = {
 
 VERIFICATION_ORDER = {
     VerificationStatus.CONFIRMED: 4,
+    VerificationStatus.LIKELY: 3,
     VerificationStatus.PROBABLE: 3,
     VerificationStatus.POTENTIAL: 2,
     VerificationStatus.UNVERIFIED: 1,
+    VerificationStatus.INCONCLUSIVE: 0,
+    VerificationStatus.FALSE_POSITIVE: 0,
 }
 
 

@@ -218,3 +218,24 @@ def parse_go_scanner_findings(
         normalized_list.append(normalized)
 
     return normalized_list
+
+
+def extract_scan_envelope(
+    raw_data: Union[str, bytes, List[Dict[str, Any]], Dict[str, Any]]
+) -> Union[Dict[str, Any], None]:
+    """Return Go ScanEnvelope metadata without dropping provenance fields.
+
+    Array input is retained for compatibility with early AI-engine callers and
+    deliberately has no envelope metadata.
+    """
+    if isinstance(raw_data, (str, bytes)):
+        parsed = json.loads(raw_data)
+    else:
+        parsed = raw_data
+    if not isinstance(parsed, dict):
+        return None
+    return {
+        key: parsed.get(key)
+        for key in ("schema_version", "target", "scope", "started_at", "mode", "reachability", "stats")
+        if key in parsed
+    }
