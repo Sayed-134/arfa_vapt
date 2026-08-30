@@ -4,21 +4,37 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"sort"
 	"sync"
 	"time"
 
 	"arfa/pkg/adaptive"
+	"arfa/pkg/coverage"
 	"arfa/pkg/crawler"
 	"arfa/pkg/detectors"
 	"arfa/pkg/httpclient"
 	"arfa/pkg/models"
 	"arfa/pkg/payloads"
+	"arfa/pkg/planner"
 	"arfa/pkg/preflight"
 	"arfa/pkg/ratelimiter"
 	"arfa/pkg/verification"
 )
+
+// evidenceSnippetLimit bounds how much of a response body ever appears in a
+// Finding's structured evidence - see models.Evidence's doc comment for the
+// redaction rationale. The full body is never stored; ResponseHash lets two
+// findings be compared without it.
+const evidenceSnippetLimit = 500
+
+// defaultMaxJobs is the hard ceiling on how many probe jobs a single scan
+// will schedule, regardless of Mode/endpoint/payload count. It exists so a
+// pathological Deep scan (many endpoints x large payload corpus x multiple
+// encodings) cannot silently balloon into an unbounded amount of work; see
+// Config.MaxJobs to override it.
+const defaultMaxJobs = 500_000
 
 type Mode string
 
@@ -38,14 +54,24 @@ type Config struct {
 	PreflightOnly bool
 	SkipPreflight bool
 	Scope         models.ScanScope
+
+	// MaxJobs bounds how many probe jobs a single Scan call will schedule.
+	// 0 uses defaultMaxJobs. This does not change what Quick/Standard/Deep
+	// mode select (their existing per-category budgets are unchanged); it
+	// is a last-resort ceiling for pathological combinations (many
+	// endpoints x large payload corpus x multiple encodings) so a scan
+	// degrades to "capped, and clearly reported as capped" instead of
+	// materializing unbounded work.
+	MaxJobs int
 }
 
 type Scanner struct {
 	cfg      Config
-	http     *httpclient.Client
-	crawl    *crawler.Crawler
+	http     Transport
+	crawl    CrawlerIface
 	reg      *detectors.Registry
 	lim      *ratelimiter.Limiter
+	verifier Verifier
 	payloads map[string][]models.Payload
 }
 
@@ -62,8 +88,11 @@ func New(cfg Config, reg *detectors.Registry) *Scanner {
 	if cfg.MaxPages < 1 {
 		cfg.MaxPages = 30
 	}
+	if cfg.MaxJobs <= 0 {
+		cfg.MaxJobs = defaultMaxJobs
+	}
 	hc := httpclient.New(cfg.Timeout)
-	return &Scanner{cfg: cfg, http: hc, crawl: crawler.New(hc, cfg.MaxPages), reg: reg, lim: ratelimiter.New(cfg.Rate)}
+	return &Scanner{cfg: cfg, http: hc, crawl: crawler.New(hc, cfg.MaxPages), reg: reg, lim: ratelimiter.New(cfg.Rate), verifier: defaultVerifier}
 }
 
 func (s *Scanner) LoadPayloads(root string) error {
@@ -112,31 +141,45 @@ func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, e
 	result.Stats.Endpoints = len(endpoints)
 	result.Stats.Parameters = countParams(endpoints)
 
-	jobs := make([]job, 0)
+	// cov tracks endpoint x parameter x vulnerability-class coverage. Seed
+	// every combination the scheduler is aware of *before* any probe runs,
+	// so the final snapshot also shows what was never attempted at all
+	// (e.g. a category with zero payloads loaded for this Mode) - not just
+	// cells that happened to produce a finding.
+	cov := coverage.New()
 	for _, ep := range endpoints {
 		for _, det := range s.reg.All() {
-			for _, pl := range s.selectPayloads(det.Category()) {
-				for _, param := range effectiveParams(ep) {
-					for _, enc := range encodings(det.Category(), s.cfg.Mode) {
-						ep2 := ep
-						ep2.Parameters = []string{param}
-						p2 := pl
-						p2.Value = encode(pl.Value, enc)
-						jobs = append(jobs, job{ep: ep2, detector: det, payload: p2, encoding: enc})
-					}
-				}
+			for _, param := range effectiveParams(ep) {
+				cov.Seed(coverage.Key{Endpoint: ep.URL, Parameter: param, Category: det.Category()})
 			}
+		}
+		// IDOR is a separate heuristic phase (see below), not a registered
+		// Detector, and it only ever considers an endpoint's *actually
+		// discovered* parameters (never the generic q/id/search fallback
+		// list) - see pkg/detectors/idor.go.
+		for _, param := range ep.Parameters {
+			cov.Seed(coverage.Key{Endpoint: ep.URL, Parameter: param, Category: "IDOR"})
 		}
 	}
 
-	if len(jobs) == 0 {
+	totalJobs := countJobs(endpoints, s.reg.All(), s.selectPayloads, s.cfg.Mode)
+	if totalJobs == 0 {
 		result.Stats.DurationMS = time.Since(start).Milliseconds()
+		result.Coverage = cov.Snapshot()
+		result.NextActions = planner.Plan(result.Coverage, planner.DefaultMaxActions)
 		return result, nil
 	}
 
+	plannedJobs := totalJobs
+	capped := false
+	if int64(plannedJobs) > int64(s.cfg.MaxJobs) {
+		plannedJobs = s.cfg.MaxJobs
+		capped = true
+	}
+
 	workers := s.cfg.Workers
-	if workers > len(jobs) {
-		workers = len(jobs)
+	if workers > plannedJobs {
+		workers = plannedJobs
 	}
 	// ctrl hands out a bounded number of concurrency permits and shrinks or
 	// grows that number based on the observed error/throttle rate (429,
@@ -145,6 +188,13 @@ func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, e
 	// of those workers can be doing real work at once. See pkg/adaptive.
 	ctrl := adaptive.New(workers)
 
+	// jobsCh is unbuffered and fed by a producer goroutine (below) that
+	// generates jobs on the fly from the same nested endpoint/detector/
+	// payload/parameter/encoding structure the old code used to fully
+	// materialize into a slice up front. With an unbuffered channel, at
+	// most one job per worker is ever alive in memory at a time - the
+	// producer blocks on send until a worker is ready, so job count is
+	// bounded by concurrency, not by corpus size. See countJobs/streamJobs.
 	jobsCh := make(chan job)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -175,10 +225,18 @@ func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, e
 					return
 				}
 				param := j.ep.Parameters[0]
+				covKey := coverage.Key{Endpoint: j.ep.URL, Parameter: param, Category: j.detector.Category()}
+
 				pr := s.rawProbe(ctx, ctrl, j.ep, param, j.payload.Value, countReq)
 				if pr.Err != nil {
 					continue
 				}
+				// A completed probe is an attempt regardless of whether it
+				// produces a finding - Mark only ever strengthens a cell
+				// (see coverage.Tracker), so a later Verified/Failed/
+				// Inconclusive observation below still wins.
+				cov.Mark(covKey, models.CoverageAttempted)
+
 				normalized := verification.Normalize(j.payload, pr)
 				callback := func(_ context.Context, _ string, _ string, _ map[string]string, _ models.Payload) models.ProbeResult {
 					return normalized
@@ -187,6 +245,7 @@ func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, e
 				for _, f := range found {
 					f.Encoding = j.encoding
 					f.VerificationStatus = detectors.Unverified
+					var vres *verification.Result
 
 					// Detection != confirmation: re-run the detector's own
 					// evidence check against an independent repeat probe
@@ -196,12 +255,15 @@ func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, e
 						evidenceCheck := func(vpr models.ProbeResult) bool {
 							return ec.HasEvidence(j.ep, vpr, j.payload)
 						}
-						vres := verification.Verify(ctx, j.ep, param, j.payload.Value, evidenceCheck, verifyProbe)
-						f.VerificationStatus = string(vres.Status)
-						f.VerificationDetail = vres.Detail
+						v := s.verifier.Verify(ctx, j.ep, param, j.payload.Value, evidenceCheck, verifyProbe)
+						vres = &v
+						f.VerificationStatus = string(v.Status)
+						f.VerificationDetail = v.Detail
 					}
 
 					f.ID = fingerprint(f)
+					f.EvidenceDetail = buildEvidence(j.detector.Category(), j.ep, param, pr, vres)
+					cov.Mark(covKey, coverage.FromVerificationStatus(f.VerificationStatus))
 					mu.Lock()
 					findings = append(findings, f)
 					mu.Unlock()
@@ -210,16 +272,7 @@ func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, e
 		}()
 	}
 
-	go func() {
-		defer close(jobsCh)
-		for _, j := range jobs {
-			select {
-			case jobsCh <- j:
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	go streamJobs(ctx, jobsCh, endpoints, s.reg.All(), s.selectPayloads, s.cfg.Mode, plannedJobs)
 	wg.Wait()
 
 	// IDOR/BOLA heuristic phase: numeric-identifier differential analysis.
@@ -237,9 +290,23 @@ func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, e
 			if ctx.Err() != nil {
 				break
 			}
-			for _, f := range detectors.ScanIDOR(ctx, ep, idorProbe) {
+			idorFindings := detectors.ScanIDOR(ctx, ep, idorProbe)
+			for _, f := range idorFindings {
 				f.ID = fingerprint(f)
 				findings = append(findings, f)
+			}
+			// Coarse but honest: ScanIDOR privately decides per-parameter
+			// whether a numeric value was present to mutate, so this marks
+			// every discovered parameter on the endpoint as at least
+			// Attempted for IDOR once the phase has run over it; any
+			// parameter that actually produced a finding is additionally
+			// upgraded to Inconclusive (IDOR findings are always
+			// UNVERIFIED - see idor.go - which maps to Inconclusive).
+			for _, param := range ep.Parameters {
+				cov.Mark(coverage.Key{Endpoint: ep.URL, Parameter: param, Category: "IDOR"}, models.CoverageAttempted)
+			}
+			for _, f := range idorFindings {
+				cov.Mark(coverage.Key{Endpoint: f.Endpoint, Parameter: f.Parameter, Category: "IDOR"}, coverage.FromVerificationStatus(f.VerificationStatus))
 			}
 		}
 	}
@@ -247,6 +314,10 @@ func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, e
 	result.Findings = dedup(findings)
 	result.Stats.AdaptiveBudget = ctrl.Budget()
 	result.Stats.DurationMS = time.Since(start).Milliseconds()
+	result.Stats.JobsPlanned = int64(plannedJobs)
+	result.Stats.JobsCapped = capped
+	result.Coverage = cov.Snapshot()
+	result.NextActions = planner.Plan(result.Coverage, planner.DefaultMaxActions)
 	sort.Slice(result.Findings, func(i, j int) bool {
 		return severity(result.Findings[i].Severity) > severity(result.Findings[j].Severity)
 	})
@@ -298,6 +369,101 @@ func (s *Scanner) selectPayloads(category string) []models.Payload {
 		limit = len(ps)
 	}
 	return ps[:limit]
+}
+
+// walkJobs iterates the endpoint x detector x payload x parameter x
+// encoding combination space in a fixed, deterministic order, calling
+// visit for each one without ever materializing them all into a slice.
+// visit returns false to stop iteration early - used to honor
+// Config.MaxJobs and context cancellation. Both counting (countJobs) and
+// actually running jobs (streamJobs) share this single walk so a capped
+// scan's "first N jobs" are identical to the first N jobs an uncapped scan
+// would have run, in the same order the pre-Milestone-2 code produced.
+func walkJobs(endpoints []models.Endpoint, dets []detectors.Detector, selectPayloads func(string) []models.Payload, mode Mode, visit func(job) bool) {
+	for _, ep := range endpoints {
+		for _, det := range dets {
+			for _, pl := range selectPayloads(det.Category()) {
+				for _, param := range effectiveParams(ep) {
+					for _, enc := range encodings(det.Category(), mode) {
+						ep2 := ep
+						ep2.Parameters = []string{param}
+						p2 := pl
+						p2.Value = encode(pl.Value, enc)
+						if !visit(job{ep: ep2, detector: det, payload: p2, encoding: enc}) {
+							return
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+// countJobs computes the total job count without allocating a job struct
+// for each one - used only to size the worker pool and to report
+// Stats.JobsPlanned/decide Stats.JobsCapped before streaming begins.
+func countJobs(endpoints []models.Endpoint, dets []detectors.Detector, selectPayloads func(string) []models.Payload, mode Mode) int {
+	n := 0
+	walkJobs(endpoints, dets, selectPayloads, mode, func(job) bool {
+		n++
+		return true
+	})
+	return n
+}
+
+// streamJobs generates jobs on the fly and sends each one on jobsCh,
+// closing it when done. Because jobsCh is unbuffered, this blocks until a
+// worker is ready for each job - at most one job per worker is ever alive
+// in memory at once, regardless of how large the full combination space
+// is. Stops early (without sending further jobs) once limit jobs have been
+// sent, or immediately if ctx is canceled.
+func streamJobs(ctx context.Context, jobsCh chan job, endpoints []models.Endpoint, dets []detectors.Detector, selectPayloads func(string) []models.Payload, mode Mode, limit int) {
+	defer close(jobsCh)
+	sent := 0
+	walkJobs(endpoints, dets, selectPayloads, mode, func(j job) bool {
+		if sent >= limit {
+			return false
+		}
+		select {
+		case jobsCh <- j:
+			sent++
+			return true
+		case <-ctx.Done():
+			return false
+		}
+	})
+}
+
+// buildEvidence assembles the structured, redaction-bounded evidence record
+// for a finding. See models.Evidence's doc comment for what is deliberately
+// excluded (raw headers, full response bodies) and why.
+func buildEvidence(category string, ep models.Endpoint, param string, pr models.ProbeResult, vres *verification.Result) *models.Evidence {
+	snippet := pr.Body
+	if len(snippet) > evidenceSnippetLimit {
+		snippet = snippet[:evidenceSnippetLimit]
+	}
+	sum := sha256.Sum256([]byte(pr.Body))
+	ev := &models.Evidence{
+		Timestamp:       time.Now().UTC().Format(time.RFC3339),
+		Endpoint:        ep.URL,
+		Parameter:       param,
+		Category:        category,
+		RequestMethod:   ep.Method,
+		RequestURL:      pr.URL,
+		ResponseStatus:  pr.Status,
+		ResponseSnippet: snippet,
+		ResponseHash:    hex.EncodeToString(sum[:]),
+	}
+	if vres != nil {
+		if vres.RepeatProbe != nil {
+			ev.VerificationTrace = append(ev.VerificationTrace, fmt.Sprintf("repeat probe: status %d, %d byte response", vres.RepeatProbe.Status, len(vres.RepeatProbe.Body)))
+		}
+		if vres.ControlProbe != nil {
+			ev.VerificationTrace = append(ev.VerificationTrace, fmt.Sprintf("control probe: status %d, %d byte response", vres.ControlProbe.Status, len(vres.ControlProbe.Body)))
+		}
+		ev.VerificationTrace = append(ev.VerificationTrace, fmt.Sprintf("verdict: %s - %s", vres.Status, vres.Detail))
+	}
+	return ev
 }
 
 func effectiveParams(ep models.Endpoint) []string {
