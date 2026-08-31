@@ -13,6 +13,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+on_error() {
+  status=$?
+  echo "===== E2E FAILURE ====="
+  echo "exit_code=$status"
+  echo "===== TEST TARGET LOG ====="
+  cat "$TMPDIR/test-target.log" 2>/dev/null || true
+  echo "===== LISTENING PORT 18080 ====="
+  (ss -ltnp 2>/dev/null | grep ':18080' || true)
+  exit "$status"
+}
+trap on_error ERR
+
 cd "$ROOT"
 go run ./cmd/test-target >"$TMPDIR/test-target.log" 2>&1 &
 SERVER_PID=$!
