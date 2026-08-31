@@ -13,16 +13,34 @@ cleanup() {
 }
 trap cleanup EXIT
 
+on_error() {
+  status=$?
+  echo "===== E2E FAILURE ====="
+  echo "exit_code=$status"
+  echo "===== TEST TARGET LOG ====="
+  cat "$TMPDIR/test-target.log" 2>/dev/null || true
+  echo "===== LISTENING PORT 18080 ====="
+  (ss -ltnp 2>/dev/null | grep ':18080' || true)
+  exit "$status"
+}
+trap on_error ERR
+
 cd "$ROOT"
-go run ./cmd/test-target >"$TMPDIR/test-target.log" 2>&1 &
+
+go build -o "$TMPDIR/test-target" ./cmd/test-target
+go build -o "$TMPDIR/arfa" ./cmd/arfa
+
+"$TMPDIR/test-target" >"$TMPDIR/test-target.log" 2>&1 &
 SERVER_PID=$!
-for _ in $(seq 1 40); do
+
+for _ in $(seq 1 80); do
   if curl --silent --fail http://127.0.0.1:18080/clean >/dev/null; then break; fi
   sleep 0.25
 done
+
 curl --silent --fail http://127.0.0.1:18080/clean >/dev/null
 
-go run ./cmd/arfa \
+"$TMPDIR/arfa" \
   -target http://127.0.0.1:18080 \
   -payload-dir ./payloads-database/PayloadsAllTheThings-master \
   -mode quick -workers 20 -rate 100 -max-pages 30 \

@@ -15,6 +15,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - name: Prepare payload database
+        run: |
+          git clone --depth 1 https://github.com/swisskyrepo/PayloadsAllTheThings.git \
+            payloads-database/PayloadsAllTheThings-master
       - name: Install Python dependencies
         run: python -m pip install -r ai-engine/requirements.txt
       - name: Go build and static checks
