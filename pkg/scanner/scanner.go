@@ -200,6 +200,14 @@ func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, e
 	var mu sync.Mutex
 	findings := make([]models.Finding, 0)
 
+	// verifyCache is scoped to this single Scan call (never reused across
+	// scans/targets - see verification.Cache's doc comment) so that
+	// verifying an identical candidate twice within one scan reuses the
+	// first repeat+control probe outcome instead of repeating it. This is
+	// the minimal integration point for ARCHITECTURE.md §11's Verification
+	// Result Cache requirement.
+	verifyCache := verification.NewCache()
+
 	countReq := func(pr models.ProbeResult) {
 		mu.Lock()
 		result.Stats.Requests++
@@ -255,10 +263,18 @@ func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, e
 						evidenceCheck := func(vpr models.ProbeResult) bool {
 							return ec.HasEvidence(j.ep, vpr, j.payload)
 						}
-						v := s.verifier.Verify(ctx, j.ep, param, j.payload.Value, evidenceCheck, verifyProbe)
+						cacheKey := verification.CacheKey(j.detector.Category(), j.ep.URL, param, j.payload.Value)
+						// GetOrCompute (not a separate Get+Set) is what
+						// makes this atomic: two workers racing on the same
+						// cacheKey must not both fall through to Verify.
+						v := verifyCache.GetOrCompute(cacheKey, func() verification.Result {
+							return s.verifier.Verify(ctx, j.ep, param, j.payload.Value, evidenceCheck, verifyProbe)
+						})
 						vres = &v
 						f.VerificationStatus = string(v.Status)
 						f.VerificationDetail = v.Detail
+						f.VerificationConfidence = string(v.Confidence)
+						f.VerificationConfidenceReason = v.ConfidenceReason
 					}
 
 					f.ID = fingerprint(f)

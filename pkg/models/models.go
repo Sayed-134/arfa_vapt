@@ -52,6 +52,17 @@ type Finding struct {
 	VerificationStatus string `json:"verification_status"`
 	VerificationDetail string `json:"verification_detail,omitempty"`
 
+	// VerificationConfidence and VerificationConfidenceReason are additive
+	// (see ARCHITECTURE.md §12: Confidence Evaluation). They are derived
+	// from the verification engine's own evidence sequence, are additional
+	// to VerificationStatus, and never replace it: two findings can share
+	// a VerificationStatus while differing in VerificationConfidence.
+	// Empty for any finding produced by code that did not run verification
+	// (e.g. IDOR heuristic findings) or by an older build, so existing
+	// consumers see no change unless this data actually exists.
+	VerificationConfidence       string `json:"verification_confidence,omitempty"`
+	VerificationConfidenceReason string `json:"verification_confidence_reason,omitempty"`
+
 	// EvidenceDetail is the structured evidence record for this finding,
 	// added in Milestone 2. It is additive and optional: nil for any
 	// finding produced by code that does not populate it, and omitted from

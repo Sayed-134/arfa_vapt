@@ -21,6 +21,28 @@ const (
 	Unverified    Status = "UNVERIFIED"
 )
 
+// Confidence is a deterministic, evidence-derived explanation of how much
+// weight a Status should carry. It is additional information alongside
+// Status, never a replacement for it: two Results can share a Status
+// (e.g. both INCONCLUSIVE) while differing in Confidence because one had
+// more of the verification sequence actually complete before it failed.
+type Confidence string
+
+const (
+	ConfidenceHigh   Confidence = "HIGH"
+	ConfidenceMedium Confidence = "MEDIUM"
+	ConfidenceLow    Confidence = "LOW"
+	ConfidenceNone   Confidence = "NONE"
+)
+
+// maxProbeAttempts bounds every individual probe (repeat or control) to at
+// most one retry. This is the entire retry budget for verification: a
+// fixed, small constant, not a policy that can grow unbounded. Every
+// attempt — original and retry — goes through the caller-supplied Prober,
+// so it is subject to the same rate limiter, adaptive concurrency budget,
+// timeout and cancellation as any other request the scanner makes.
+const maxProbeAttempts = 2
+
 // Prober performs one additional HTTP probe for verification purposes. The
 // scanner supplies an adapter around its own httpclient/rate-limiter so
 // verification requests share the same connection pool and adaptive pacing
@@ -36,6 +58,14 @@ type Result struct {
 	Detail       string
 	RepeatProbe  *models.ProbeResult
 	ControlProbe *models.ProbeResult
+
+	// Confidence and ConfidenceReason are derived purely from Status and
+	// which parts of the repeat/control sequence actually completed (see
+	// evaluateConfidence). They are explainable (ConfidenceReason says
+	// why) and reproducible (a pure function of the inputs) per
+	// ARCHITECTURE.md §12, and never override Status.
+	Confidence       Confidence
+	ConfidenceReason string
 }
 
 // Normalize applies light, non-destructive cleanup to a raw probe result
@@ -64,34 +94,97 @@ func Normalize(p models.Payload, pr models.ProbeResult) models.ProbeResult {
 // detector already committed to.
 func Verify(ctx context.Context, ep models.Endpoint, param string, originalValue string, evidenceCheck func(models.ProbeResult) bool, probe Prober) Result {
 	if probe == nil || evidenceCheck == nil {
-		return Result{Status: Inconclusive, Detail: "verification prober or evidence check unavailable"}
+		res := Result{Status: Inconclusive, Detail: "verification prober or evidence check unavailable"}
+		res.Confidence, res.ConfidenceReason = evaluateConfidence(res.Status, false)
+		return res
 	}
 
-	repeat := probe(ctx, ep, param, originalValue)
+	repeat := probeWithRetry(ctx, probe, ep, param, originalValue)
 	res := Result{RepeatProbe: &repeat}
 
 	if repeat.Err != nil {
 		res.Status = Inconclusive
-		res.Detail = "verification (repeat) probe failed: " + repeat.Err.Error()
+		res.Detail = "verification (repeat) probe failed after retry: " + repeat.Err.Error()
+		res.Confidence, res.ConfidenceReason = evaluateConfidence(res.Status, false)
 		return res
 	}
 	if !evidenceCheck(repeat) {
 		res.Status = Potential
 		res.Detail = "original evidence did not reproduce on an independent repeat probe"
+		res.Confidence, res.ConfidenceReason = evaluateConfidence(res.Status, false)
 		return res
 	}
 
-	control := probe(ctx, ep, param, "arfa-control-"+shortHash(originalValue))
+	control := probeWithRetry(ctx, probe, ep, param, "arfa-control-"+shortHash(originalValue))
 	res.ControlProbe = &control
-	if control.Err == nil && evidenceCheck(control) {
+	if control.Err != nil {
+		// Previously a failed control probe silently fell through to
+		// CONFIRMED. That is not licensed: the false-positive check never
+		// actually ran, so nothing rules out the benign value also
+		// triggering the same evidence. Report INCONCLUSIVE instead - the
+		// repeat probe did reproduce (see Confidence), but the
+		// false-positive check itself could not complete.
+		res.Status = Inconclusive
+		res.Detail = "verification (control) probe failed after retry: evidence reproduced but the false-positive check could not complete: " + control.Err.Error()
+		res.Confidence, res.ConfidenceReason = evaluateConfidence(res.Status, true)
+		return res
+	}
+	if evidenceCheck(control) {
 		res.Status = FalsePositive
 		res.Detail = "evidence marker also present for a benign, non-attack control value"
+		res.Confidence, res.ConfidenceReason = evaluateConfidence(res.Status, true)
 		return res
 	}
 
 	res.Status = Confirmed
 	res.Detail = "evidence reproduced on independent probe and absent for a benign control value"
+	res.Confidence, res.ConfidenceReason = evaluateConfidence(res.Status, true)
 	return res
+}
+
+// probeWithRetry issues probe up to maxProbeAttempts times, returning as
+// soon as a probe succeeds (Err == nil) or ctx is canceled. This is the
+// verification engine's only retry point, and it never grows the number of
+// attempts beyond the fixed maxProbeAttempts constant.
+func probeWithRetry(ctx context.Context, probe Prober, ep models.Endpoint, param, value string) models.ProbeResult {
+	var last models.ProbeResult
+	for attempt := 0; attempt < maxProbeAttempts; attempt++ {
+		if ctx.Err() != nil {
+			return models.ProbeResult{Err: ctx.Err()}
+		}
+		last = probe(ctx, ep, param, value)
+		if last.Err == nil {
+			return last
+		}
+	}
+	return last
+}
+
+// evaluateConfidence derives an explainable, reproducible Confidence for a
+// Status. repeatReproduced records whether the repeat probe actually
+// reproduced the original evidence before the Status was decided, which is
+// the one piece of information that distinguishes, for example, an
+// INCONCLUSIVE caused by the repeat probe failing outright (no signal at
+// all) from one caused by the control probe failing after the repeat probe
+// already reproduced the evidence (partial signal). This mirrors
+// ARCHITECTURE.md §12: Confidence is explainable, reproducible from
+// available evidence, and never substitutes for Status.
+func evaluateConfidence(status Status, repeatReproduced bool) (Confidence, string) {
+	switch status {
+	case Confirmed:
+		return ConfidenceHigh, "evidence reproduced on an independent repeat probe and was absent for a benign control value"
+	case FalsePositive:
+		return ConfidenceHigh, "evidence also appeared for a benign, non-attack control value, so the original signal is not attack-specific"
+	case Potential:
+		return ConfidenceLow, "original evidence did not reproduce on an independent repeat probe"
+	case Inconclusive:
+		if repeatReproduced {
+			return ConfidenceMedium, "evidence reproduced on repeat, but the false-positive check against a control value could not complete"
+		}
+		return ConfidenceNone, "verification could not gather any independent evidence before failing"
+	default:
+		return ConfidenceNone, "verification did not run"
+	}
 }
 
 // shortHash keeps the control value visibly distinct from any real payload

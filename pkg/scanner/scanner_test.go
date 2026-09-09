@@ -158,6 +158,62 @@ func TestScan_PopulatesStructuredEvidenceForConfirmedFinding(t *testing.T) {
 	if f.VerificationStatus != "CONFIRMED" {
 		t.Fatalf("expected CONFIRMED given this endpoint reflects only the real payload, got %s", f.VerificationStatus)
 	}
+	if f.VerificationConfidence != "HIGH" {
+		t.Fatalf("expected HIGH verification confidence for a CONFIRMED finding, got %q", f.VerificationConfidence)
+	}
+	if f.VerificationConfidenceReason == "" {
+		t.Fatal("expected a non-empty verification confidence reason")
+	}
+}
+
+// --- 6. Verification Result Cache -------------------------------------------
+
+// TestScan_VerificationCacheAvoidsDuplicateProbesForIdenticalCandidate is the
+// scanner-level regression test for the Verification Result Cache gap: two
+// detectors that both fire an identical candidate (same category, endpoint,
+// parameter and payload value) must only pay for one repeat+control
+// verification sequence, not two, even though both candidates are detected
+// and appear in coverage/reporting.
+func TestScan_VerificationCacheAvoidsDuplicateProbesForIdenticalCandidate(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query().Get("q")
+		if q != "" {
+			w.Write([]byte("<html><body>" + q + "</body></html>"))
+			return
+		}
+		w.Write([]byte(`<html><body><input name="q"></body></html>`))
+	}))
+	defer srv.Close()
+
+	cfg := Config{Workers: 1, Rate: 200, Timeout: 2 * time.Second, Mode: Quick, MaxPages: 5, SkipPreflight: true}
+	// Two independent XSS detector instances register the same category and
+	// will each independently detect + attempt to verify the identical
+	// candidate (same category/endpoint/param/payload value) against this
+	// server, since both share the one XSS payload loaded below.
+	reg := detectors.NewRegistry(detectors.XSS{}, detectors.XSS{})
+	s := New(cfg, reg)
+	s.payloads = map[string][]models.Payload{
+		"XSS": {{ID: "t1", Category: "XSS", Value: "<xsstestmarker>"}},
+	}
+
+	result, err := s.Scan(context.Background(), srv.URL)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Without a cache: 2 initial detect probes (one per detector instance)
+	// + 2 verification sequences x 2 probes (repeat+control) each = 6.
+	// With the cache, the second detector's identical candidate reuses the
+	// first verification Result: 2 initial detect probes + 1 verification
+	// sequence x 2 probes = 4.
+	if result.Stats.Requests != 4 {
+		t.Fatalf("expected exactly 4 requests (2 detect + 1 cached verification pair), got %d - cache is not preventing duplicate verification probes", result.Stats.Requests)
+	}
+	if len(result.Findings) != 1 {
+		t.Fatalf("expected the two identical candidates to dedup to 1 finding, got %d", len(result.Findings))
+	}
+	if result.Findings[0].VerificationStatus != "CONFIRMED" {
+		t.Fatalf("expected the cached verification result to still be CONFIRMED, got %s", result.Findings[0].VerificationStatus)
+	}
 }
 
 // --- 4. Coverage + planner wiring ------------------------------------------
