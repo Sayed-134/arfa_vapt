@@ -63,6 +63,20 @@ type Config struct {
 	// degrades to "capped, and clearly reported as capped" instead of
 	// materializing unbounded work.
 	MaxJobs int
+
+	// MaxDuration bounds the wall-clock time a single Scan call is allowed
+	// to run, covering preflight, crawling, the job/worker phase and the
+	// IDOR phase alike. 0 (the default) means unbounded, preserving prior
+	// behavior exactly - Scan only stops early when the caller-supplied
+	// ctx is canceled, same as before this field existed.
+	//
+	// When MaxDuration elapses, Scan does not schedule further work, lets
+	// in-flight workers exit through the same ctx.Err() checks used for
+	// caller cancellation, and returns the findings/coverage/evidence
+	// gathered so far as a valid partial ScanEnvelope - never a hard
+	// error. Stats.TimeBudgetExhausted records this distinctly from an
+	// externally canceled ctx or any other error.
+	MaxDuration time.Duration
 }
 
 type Scanner struct {
@@ -104,9 +118,34 @@ func (s *Scanner) LoadPayloads(root string) error {
 	return nil
 }
 
-func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, error) {
+// Scan runs one scan against target, bounded by both parentCtx (caller
+// cancellation - unchanged from prior behavior) and, if Config.MaxDuration
+// is set, an internal deadline derived from it. The two are kept
+// distinguishable throughout: Stats.TimeBudgetExhausted is only ever set
+// when the internal deadline - not the caller's ctx - is what stopped the
+// scan, and a MaxDuration timeout never surfaces as a returned error, since
+// the findings/coverage/evidence gathered before the deadline remain a
+// valid, reportable partial result.
+func (s *Scanner) Scan(parentCtx context.Context, target string) (result models.ScanResult, err error) {
 	start := time.Now()
-	result := models.ScanResult{SchemaVersion: "arfa.scan/v1", Target: target, Scope: s.cfg.Scope, StartedAt: start.UTC().Format(time.RFC3339), Mode: string(s.cfg.Mode)}
+	result = models.ScanResult{SchemaVersion: "arfa.scan/v1", Target: target, Scope: s.cfg.Scope, StartedAt: start.UTC().Format(time.RFC3339), Mode: string(s.cfg.Mode)}
+
+	ctx := parentCtx
+	if s.cfg.MaxDuration > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(parentCtx, s.cfg.MaxDuration)
+		defer cancel()
+	}
+	// timeBudgetExhausted is true only when our own internal deadline (not
+	// the caller's parentCtx) is the reason ctx ended up canceled. Checking
+	// parentCtx.Err() == nil is what rules out "the caller canceled us,
+	// and that happened to also cancel our derived ctx" - a real external
+	// cancellation must never be misreported as an exhausted time budget.
+	defer func() {
+		if s.cfg.MaxDuration > 0 && parentCtx.Err() == nil && ctx.Err() == context.DeadlineExceeded {
+			result.Stats.TimeBudgetExhausted = true
+		}
+	}()
 
 	if !s.cfg.SkipPreflight {
 		pf := preflight.Run(ctx, target, preflight.DefaultConfig())
@@ -133,9 +172,19 @@ func (s *Scanner) Scan(ctx context.Context, target string) (models.ScanResult, e
 		result.Reachability = models.Reachability{Status: "skipped", Reason: "preflight disabled"}
 	}
 
-	endpoints, pages, err := s.crawl.Crawl(ctx, target)
-	if err != nil {
-		return result, err
+	endpoints, pages, crawlErr := s.crawl.Crawl(ctx, target)
+	if crawlErr != nil {
+		// A crawl failure caused by our own internal deadline elapsing is
+		// not a scan failure: it is exactly the "ran out of time" case
+		// this field exists to describe, so return the (empty but valid)
+		// partial result with no error, same as the PreflightOnly/
+		// unreachable early-return paths above already do. Any other
+		// crawl error (including a canceled parentCtx) is unchanged.
+		if s.cfg.MaxDuration > 0 && parentCtx.Err() == nil && ctx.Err() == context.DeadlineExceeded {
+			result.Stats.DurationMS = time.Since(start).Milliseconds()
+			return result, nil
+		}
+		return result, crawlErr
 	}
 	result.Stats.Pages = pages
 	result.Stats.Endpoints = len(endpoints)

@@ -159,6 +159,15 @@ type ScanStats struct {
 	// because Config.MaxJobs was reached before all endpoint/detector/
 	// payload/parameter/encoding combinations were scheduled.
 	JobsCapped bool `json:"jobs_capped,omitempty"`
+
+	// TimeBudgetExhausted is true if Config.MaxDuration was set and the
+	// scan's internal time budget elapsed before the scan would otherwise
+	// have finished (see pkg/scanner.Scan). It is additive and omitted
+	// from JSON when false, so existing consumers see no change unless a
+	// scan actually ran out of time. Distinct from a caller-canceled ctx:
+	// this is only ever set when the scan's own deadline - not an
+	// external cancellation - is what stopped it.
+	TimeBudgetExhausted bool `json:"time_budget_exhausted,omitempty"`
 }
 
 // ScanScope is an auditable record of the explicit authorization decision.

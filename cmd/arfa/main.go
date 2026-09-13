@@ -22,7 +22,7 @@ func main() {
 	var workers int
 	var rate float64
 	var pages int
-	var timeout time.Duration
+	var timeout, maxDuration time.Duration
 	var authorized, verbose, preflightOnly, skipPreflight bool
 	flag.StringVar(&target, "target", "", "authorized target URL")
 	flag.StringVar(&payloadDir, "payload-dir", "./payloads-database/PayloadsAllTheThings-master", "Payload repository root")
@@ -33,6 +33,7 @@ func main() {
 	flag.Float64Var(&rate, "rate", 10, "starting requests/sec")
 	flag.IntVar(&pages, "max-pages", 30, "crawler page limit")
 	flag.DurationVar(&timeout, "timeout", 12*time.Second, "per-request timeout (for example 12s)")
+	flag.DurationVar(&maxDuration, "max-duration", 0, "overall scan time budget (for example 10m); 0 means unbounded")
 	flag.BoolVar(&authorized, "i-have-authorization", false, "required acknowledgement for active scanning")
 	flag.BoolVar(&verbose, "verbose", false, "verbose logging")
 	flag.BoolVar(&preflightOnly, "preflight-only", false, "run reachability checks and do not scan")
@@ -79,7 +80,7 @@ func main() {
 		m = scanner.Standard
 	}
 	reg := detectors.NewRegistry(detectors.XSS{}, detectors.SQLi{}, detectors.LFI{}, detectors.RCE{}, detectors.SSTI{}, detectors.SSRF{}, detectors.XXE{}, detectors.CRLF{}, detectors.Redirect{})
-	s := scanner.New(scanner.Config{Workers: workers, Rate: rate, Timeout: timeout, Mode: m, MaxPages: pages, Verbose: verbose, PreflightOnly: preflightOnly, SkipPreflight: skipPreflight, Scope: scanScope}, reg)
+	s := scanner.New(scanner.Config{Workers: workers, Rate: rate, Timeout: timeout, Mode: m, MaxPages: pages, Verbose: verbose, PreflightOnly: preflightOnly, SkipPreflight: skipPreflight, Scope: scanScope, MaxDuration: maxDuration}, reg)
 	if !preflightOnly {
 		if err := s.LoadPayloads(payloadDir); err != nil {
 			log.Fatal(err)
@@ -90,7 +91,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Reachability: %s (%s) | Findings: %d | Requests: %d | Duration: %d ms | Adaptive budget: %d/%d\n", r.Reachability.Status, r.Reachability.Reason, len(r.Findings), r.Stats.Requests, r.Stats.DurationMS, r.Stats.AdaptiveBudget, workers)
+	fmt.Printf("Reachability: %s (%s) | Findings: %d | Requests: %d | Duration: %d ms | Adaptive budget: %d/%d | Time budget exhausted: %t\n", r.Reachability.Status, r.Reachability.Reason, len(r.Findings), r.Stats.Requests, r.Stats.DurationMS, r.Stats.AdaptiveBudget, workers, r.Stats.TimeBudgetExhausted)
 	if err := report.JSON(filepath.Join(out, "scan_results.json"), r); err != nil {
 		log.Fatal(err)
 	}
