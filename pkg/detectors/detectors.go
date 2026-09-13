@@ -14,6 +14,23 @@ func (XSS) Category() string { return "XSS" }
 func (XSS) HasEvidence(ep models.Endpoint, pr models.ProbeResult, p models.Payload) bool {
 	return strings.Contains(pr.Body, p.Value)
 }
+
+// ConfirmationCaveat documents Technical Debt item #10 directly in the
+// source: this detector's evidence check (HasEvidence, above) only proves
+// that the injected payload string is present, verbatim, somewhere in the
+// HTTP response body. Verification (pkg/verification.Verify) strengthens
+// that into CONFIRMED by reproducing the same evidence on an independent
+// repeat probe and ruling it out for a benign control value - which rules
+// out coincidence or a static/always-present string, but still never
+// parses, renders or executes the response as a browser would. So CONFIRMED
+// here means reliable, non-coincidental server-side reflection of the
+// payload; it does not mean the payload was proven to execute as
+// JavaScript. Confirming actual execution (e.g. that a <script> tag ran,
+// or that output-context escaping was truly absent) needs a separate
+// browser/DOM-based verification step this detector does not perform.
+func (XSS) ConfirmationCaveat() string {
+	return "CONFIRMED here means the payload was reproducibly reflected in the response (verified via an independent repeat probe and a benign control probe, per pkg/verification.Verify) - it does not prove the payload executed as JavaScript in a browser. Confirming execution requires separate browser/DOM-based verification."
+}
 func (d XSS) Detect(ctx context.Context, ep models.Endpoint, p models.Payload, probe Probe) []models.Finding {
 	var o []models.Finding
 	for _, param := range params(ep) {

@@ -326,6 +326,18 @@ func (s *Scanner) Scan(parentCtx context.Context, target string) (result models.
 						f.VerificationConfidenceReason = v.ConfidenceReason
 					}
 
+					// TD #10: attach a class-specific clarification of what
+					// CONFIRMED does and does not prove, when the detector
+					// documents one (see detectors.CaveatProvider). Additive
+					// only - never changes VerificationStatus/Detail/
+					// Confidence, and only ever set when the status is
+					// exactly CONFIRMED.
+					if f.VerificationStatus == string(verification.Confirmed) {
+						if cp, ok := j.detector.(detectors.CaveatProvider); ok {
+							f.VerificationCaveat = cp.ConfirmationCaveat()
+						}
+					}
+
 					f.ID = fingerprint(f)
 					f.EvidenceDetail = buildEvidence(j.detector.Category(), j.ep, param, pr, vres)
 					cov.Mark(covKey, coverage.FromVerificationStatus(f.VerificationStatus))

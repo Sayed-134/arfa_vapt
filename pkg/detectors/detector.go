@@ -22,6 +22,24 @@ type Detector interface {
 type EvidenceChecker interface {
 	HasEvidence(ep models.Endpoint, pr models.ProbeResult, p models.Payload) bool
 }
+
+// CaveatProvider is an optional additional interface a Detector can
+// implement to attach a class-specific clarification of what its own
+// CONFIRMED verification status does and does not establish. pkg/verification's
+// CONFIRMED is defined generically (see verification.Verify's doc comment):
+// evidence reproduced on an independent repeat probe and was absent for a
+// benign control value. That generic definition does not change here and
+// is shared by every detector. What differs by vulnerability class is what
+// that reproducible evidence actually proves - server-side reflection
+// evidence, for example, is not the same claim as proof of code execution.
+// A detector implements CaveatProvider only when its own CONFIRMED status
+// needs that distinction spelled out; the scanner attaches the returned
+// text to a finding only when VerificationStatus is exactly CONFIRMED, and
+// only for detectors that implement this interface - all other detectors
+// and all other statuses are unaffected.
+type CaveatProvider interface {
+	ConfirmationCaveat() string
+}
 type Registry struct{ items []Detector }
 
 func NewRegistry(ds ...Detector) *Registry {

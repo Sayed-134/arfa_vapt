@@ -63,6 +63,17 @@ type Finding struct {
 	VerificationConfidence       string `json:"verification_confidence,omitempty"`
 	VerificationConfidenceReason string `json:"verification_confidence_reason,omitempty"`
 
+	// VerificationCaveat is an additive, class-specific clarification of
+	// what a CONFIRMED VerificationStatus does and does not establish for
+	// this particular finding (see detectors.CaveatProvider and Technical
+	// Debt item #10 - XSS CONFIRMED meaning reproducible reflection, not
+	// proof of JavaScript execution). It never changes VerificationStatus,
+	// VerificationDetail or VerificationConfidence, and is only populated
+	// when the originating detector implements CaveatProvider and this
+	// finding's VerificationStatus is exactly CONFIRMED; empty (and
+	// omitted from JSON) otherwise, so existing consumers see no change.
+	VerificationCaveat string `json:"verification_caveat,omitempty"`
+
 	// EvidenceDetail is the structured evidence record for this finding,
 	// added in Milestone 2. It is additive and optional: nil for any
 	// finding produced by code that does not populate it, and omitted from
