@@ -1,0 +1,673 @@
+# ARFA VAPT — Platform Strategy
+
+> **Status:** Strategic reference — long-term vision and architectural direction.
+> **Scope:** Defines how ARFA is designed as a platform, not what is implemented today.
+> **Relationship to other documents:**
+> - `ARCHITECTURE.md` — complete architectural design of the current system
+> - `ARFA_MASTER_CONTEXT.md` — current state, closed milestones, active roadmap
+> - `PLATFORM_STRATEGY.md` (this file) — long-term vision, extension model, architectural principles
+> - **Code** — the actual, verified source of truth for what exists
+
+---
+
+## 1. Vision & Philosophy
+
+ARFA VAPT is designed as a **platform**, not as a scanner that grows features over time.
+
+The founding principle:
+
+> **Design ARFA for the scale of tomorrow's product. Build it incrementally with strict engineering discipline.**
+
+This means:
+
+1. **The architecture describes the complete product we intend to reach** — not only what is implemented today.
+2. **The core is stable and versioned** — extensions and new capabilities must not force the core to be rebuilt.
+3. **New capabilities are added by extension, not by rewrite** — whether they arrive next month or in ten years.
+4. **Planning is big; execution is incremental; engineering discipline is strict.**
+
+ARFA does not set a ceiling on itself based on the capabilities of today's tools, the size of today's team, or the state of today's code.
+
+ARFA also does not use "big vision" as permission to skip contracts, tests, or phasing.
+
+Both statements hold simultaneously. The rest of this document defines how.
+
+---
+
+## 2. The Four Layers
+
+ARFA's development follows four distinct conceptual layers. Confusing them is the source of most architectural drift.
+
+```
+┌─────────────────────────────────────────────────────┐
+│  ARCHITECTURE                                       │
+│  The complete picture of what ARFA is designed      │
+│  to become.                                         │
+│  → ARCHITECTURE.md                                  │
+└─────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────┐
+│  ROADMAP                                            │
+│  The order in which capabilities are reached.       │
+│  Updated as the project evolves.                    │
+│  → ARFA_MASTER_CONTEXT.md                           │
+└─────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────┐
+│  PHASE                                              │
+│  The specific work being executed now.              │
+│  Bounded, tested, reviewable, reversible.           │
+└─────────────────────────────────────────────────────┘
+                        ↓
+┌─────────────────────────────────────────────────────┐
+│  CODE                                               │
+│  What is actually implemented and verified.         │
+│  The ultimate source of truth.                      │
+└─────────────────────────────────────────────────────┘
+```
+
+**Rules:**
+
+- Architecture is allowed to describe capabilities that do not exist yet.
+- Roadmap is allowed to change.
+- Phases are allowed to be small.
+- Code is never allowed to lie about itself.
+
+A capability existing in the Architecture does **not** mean it exists in the code.
+A capability existing in the Roadmap does **not** mean it is being built now.
+
+---
+
+## 3. Stable Core Contracts
+
+The core is **stable**, not immutable.
+
+Immutability is a myth: even `ScanEnvelope v1` may eventually require `v2`. What matters is that:
+
+- The core defines a small set of **contracts** that everything else depends on.
+- Changes to those contracts are **versioned**, **documented**, and **compatible-by-default**.
+- Extensions and capabilities are added **around** the core, not by rewriting it.
+
+### Core contracts (stable, versioned)
+
+| Contract | Purpose |
+|----------|---------|
+| Authorization / Scope | Gate every active operation. Non-negotiable. |
+| Scan Job | A unit of scanning work. |
+| ScanEnvelope | The JSON boundary between the Go scanner and downstream analysis. |
+| Finding | The authoritative result model. Additive extensions only. |
+| Verification Status | The currently defined verification statuses as documented in `ARCHITECTURE.md` and implemented in the codebase. |
+| Verification Confidence | Additive detail derived from verification evidence. |
+| Evidence | Structured, redaction-bounded proof for a finding. |
+| Coverage | Endpoint × Parameter × Vulnerability-class tracking. |
+| Planner / execution contracts | Deterministic next-action derivation. |
+| Pipeline lifecycle | Discovery → Detection → Verification → Evidence → Finding → Report. |
+| Reporting contracts | Final JSON output and its schema. |
+| Extension contracts | The interfaces by which new capabilities plug in. |
+
+> **Note on Verification Status:** This document does not introduce new verification statuses. The authoritative list is defined by `ARCHITECTURE.md` and the current code. Any future addition to that list is a versioned core change, subject to the rules in §3 and §7.
+
+### The Core Rule
+
+> **An extension must never force a change to the core.**
+
+If an extension requires a core change, one of two things is true:
+
+1. The extension is not yet shaped correctly, and should be reshaped.
+2. The core is genuinely missing a capability, and a **versioned** core change is required — with explicit architectural approval, backward compatibility, and regression coverage.
+
+There is no third option.
+
+---
+
+## 4. Extension System
+
+### 4.1 Concept — Multi-Capability
+
+An ARFA extension is **not** "a detector." It is a package that may contribute one or more of the following capabilities:
+
+- Detector
+- Verifier
+- Analyzer
+- Crawler / Discovery capability
+- Payload provider
+- Evidence processor
+- Correlation capability
+- Risk capability
+- Integration / Bridge
+- Language / framework intelligence
+
+An extension is not required to implement all of them. It is required to **declare** which it implements, in its manifest.
+
+**Example:**
+
+```
+Extension: java-security
+Capabilities:
+  - Java framework detection
+  - Java-specific detector (deserialization, expression injection, ...)
+  - Java-specific payload provider
+  - Java-specific verification
+```
+
+This is stronger than a flat "Java / PHP / .NET" folder split, because a language by itself is not a capability — the capabilities that a language enables are.
+
+### 4.2 Extension Contract
+
+The architecture must define **what an extension is**, before deciding **how it is loaded**.
+
+At minimum, the contract defines:
+
+- What an extension declares (capabilities, targets, dependencies).
+- What an extension is given (core services, configuration, target context).
+- What an extension may return (findings, evidence, coverage updates).
+- What an extension may never do (modify core contracts, bypass authorization, silently override verification).
+
+The contract is the same regardless of how the extension is packaged or loaded.
+
+### 4.3 Extension Registry
+
+The registry is the core's view of what extensions are available.
+
+Responsibilities:
+
+- Discover extensions
+- Register them
+- Validate their manifests
+- Track their lifecycle state
+- Expose their capabilities to the pipeline
+
+The registry does not execute extensions. It knows about them.
+
+### 4.4 Extension Lifecycle
+
+Every extension passes through a defined lifecycle:
+
+```
+Discover → Register → Validate → Enable → Configure → Run → Disable → Upgrade → Remove
+```
+
+Each transition is explicit. Failure at any stage must be isolated.
+
+### 4.5 Manifest
+
+Every extension carries a manifest describing itself. Required fields:
+
+- `name`
+- `id`
+- `version`
+- `extension_api_version`
+- `core_compatibility`
+- `capabilities` (list of capability types)
+- `dependencies`
+- `configuration_schema`
+- `supported_targets` / `supported_frameworks`
+- `security` / `trust` metadata
+
+Optional metadata:
+
+- `author`
+- `description`
+- `license`
+
+The manifest is the contract between the extension and the core. The core trusts nothing that is not declared in the manifest.
+
+### 4.6 Trust & Security
+
+Extensions are a security boundary. The architecture must treat them as such from the beginning, even before the extension system is implemented.
+
+Principles:
+
+- An extension **does not automatically gain access** to target traffic, filesystem, network, or secrets.
+- Access is **declared** in the manifest and **granted** by policy.
+- Extensions may be **isolated** from each other.
+- Extensions have **resource limits** (CPU, memory, network, runtime).
+- Extensions have **explicit permissions** for any privileged operation.
+
+This is true even when the extension system is only built-in.
+
+### 4.7 Isolation & Failure Handling
+
+> **A failing extension must not bring down the core.**
+
+Every extension invocation is bounded by:
+
+- Timeouts
+- Panics / errors caught at the boundary
+- Resource limits
+- Explicit rollback of partial state
+
+If an extension fails, the pipeline records the failure, coverage reflects an inconclusive outcome for the affected cells, and the scan continues.
+
+### 4.8 Loading & Runtime — Deferred Decision
+
+The architecture must **not** commit to a specific loading/runtime mechanism today.
+
+Possible mechanisms include:
+
+- Built-in (compiled into the binary)
+- Process-local plugins
+- External processes (e.g. gRPC)
+- WebAssembly
+- Other mechanisms not yet available
+
+Each has tradeoffs. The correct choice depends on the state of the ecosystem at the time the extension system is implemented.
+
+**What the architecture commits to:**
+
+```
+Extension Contract
+        ↓
+Extension Registry
+        ↓
+Extension Lifecycle
+        ↓
+Loader / Runtime   ← implementation decision, per phase
+```
+
+The architecture defines the first three. It leaves the fourth open.
+
+The architecture **must** be designed so that external extensions are possible — even if the first implementation is built-in.
+
+---
+
+## 5. Integration Boundary
+
+ARFA does not exist in a vacuum. It must coexist with the rest of the security tooling ecosystem.
+
+### 5.1 Integration as a First-Class Concept
+
+Integration with external tools is an architectural capability, not a feature.
+
+The integration boundary must support, over time:
+
+```
+ARFA ↔ Burp Suite
+ARFA ↔ ZAP
+ARFA ↔ Nuclei
+ARFA ↔ other security tools
+```
+
+### 5.2 Burp Bridge — Bidirectional
+
+The Burp integration is bidirectional. What may flow across the boundary includes:
+
+- Findings
+- Requests / Responses
+- Evidence
+- Targets
+- Scope
+- Scan context
+
+Not all of this flows in the first implementation. The architecture must allow all of it.
+
+### 5.3 Proxy Capability — Future, Not Rejected
+
+Using Burp (or a similar tool) as a proxy is a **future capability**, not a rejected one.
+
+It is not committed to today, and it is not excluded from the architecture.
+
+### 5.4 No Tool Is Off-Limits
+
+ARFA does not exclude integration with any tool merely because that tool is strong.
+
+Each integration is evaluated on its value to ARFA and its cost.
+
+---
+
+## 6. Evidence Provenance
+
+Every finding in ARFA carries **provenance**: a durable record of who produced it, and how.
+
+Minimum provenance fields:
+
+- Who / what produced the finding (core detector, extension, external tool, AI analyzer).
+- Which extension and version (if applicable).
+- Which detector.
+- Which verification method and result.
+- Which evidence supports the finding.
+
+Provenance is not optional metadata. It is what makes ARFA findings **reproducible, auditable, and defensible**.
+
+### Why this matters
+
+The ARFA pipeline is:
+
+```
+Detection → Verification → Evidence → Confidence → Finding
+                                                        ↓
+                                Correlation → Attack Chain → Risk → Report
+```
+
+Without provenance, the pipeline is opaque. With provenance, every stage can be audited independently.
+
+This is a core differentiator of ARFA: findings that can be **traced** from report back to detector, verifier, and evidence.
+
+### Extending provenance
+
+External tools and extensions must be able to **contribute** to provenance, not replace it.
+
+A finding arriving from Burp or from a Java extension still produces an ARFA finding with its own provenance, marked with the external source.
+
+---
+
+## 7. Versioning & Compatibility
+
+ARFA versions more than code. It versions contracts.
+
+### Versioned surfaces
+
+- Core API version
+- Extension API version
+- Contract versions (ScanEnvelope, Finding, Evidence, ...)
+- Manifest version
+
+### The Compatibility Rule
+
+> **An extension must not break the core.**
+> **A core change must not break extensions that have not requested it.**
+
+Breaking changes are:
+
+- Versioned (`v2` alongside `v1` where possible)
+- Documented
+- Announced via compatibility metadata
+- Validated by regression tests
+
+### Deprecation
+
+Old versions remain functional until explicitly removed, and removals follow a documented deprecation policy.
+
+---
+
+## 8. Learning From Existing Tools
+
+ARFA studies the strongest existing tools in the field — including Burp Suite, ZAP, Nuclei, Metasploit, and others — as **sources of capability understanding**, not as competitors to imitate or to dismiss.
+
+For each capability that another tool has proven valuable, ARFA asks:
+
+1. What problem does this capability solve?
+2. Why did this tool's implementation succeed?
+3. Does ARFA need this capability?
+4. If yes, what is the best design for ARFA?
+
+ARFA does not:
+
+- Copy another tool's implementation.
+- Claim superiority without a benchmark.
+- Reject a capability merely because another tool is strong in it.
+
+ARFA does:
+
+- Take the capability seriously.
+- Design it within ARFA's own architecture.
+- Implement it in its own phase, with its own contracts and tests.
+
+Where ARFA differentiates is **not** in any single capability. It is in the **integration** of capabilities across a single, evidence-backed, provenance-preserving pipeline.
+
+---
+
+## 9. Scope of Ambition — and Its Limits
+
+### 9.1 No self-imposed ceiling
+
+ARFA does not set a ceiling on itself based on:
+
+- The capabilities of today's competing tools
+- The size of the current team
+- The state of the current code
+
+Any capability that could serve ARFA's mission is allowed to enter the architecture and roadmap, regardless of size.
+
+### 9.2 No self-imposed rush
+
+Planning for a large product does **not** mean implementing everything at once.
+
+> ARFA plans for the large product from the beginning, and implements it incrementally, with strict engineering discipline at every step.
+
+### 9.3 What this does NOT mean
+
+It does **not** mean:
+
+- Building 50 features at once.
+- Abandoning phased execution.
+- Skipping contracts, tests, or reviews.
+- Treating the architecture as a to-do list.
+
+It **does** mean:
+
+- Knowing the destination before laying the next stone.
+- Ensuring today's foundation can host tomorrow's capability without a rewrite.
+- Treating "add a new capability" as a normal event, not a crisis.
+
+---
+
+## 10. Architecture vs Roadmap vs Phase
+
+### 10.1 Architecture
+
+Describes the complete product ARFA intends to become. May include capabilities not yet scheduled.
+
+### 10.2 Roadmap
+
+Orders the capabilities described in the architecture. Changes over time. Not a commitment to a specific date.
+
+### 10.3 Phase
+
+The bounded unit of work currently being executed. Has:
+
+- A single scope
+- A feature branch
+- Tests
+- Review
+- A merge point
+- A freeze point
+
+### 10.4 Current state (at the time of this document's creation)
+
+At the time of this document's creation:
+
+- Phase 4 — Technical Debt was in progress.
+- TD #1 was the next candidate.
+- No new phase was open.
+
+> **This section is a snapshot, not a permanent contract.**
+> The authoritative, always-current state of phases, milestones, and technical debt is maintained in `ARFA_MASTER_CONTEXT.md`. If this section and `ARFA_MASTER_CONTEXT.md` disagree, `ARFA_MASTER_CONTEXT.md` wins.
+
+### 10.5 Future capability roadmap
+
+After the current phase closes, capability work proceeds through the intake process described in §15. Candidate capabilities include (but are not limited to):
+
+- Authenticated scanning
+- Out-of-band (OOB) verification
+- JavaScript / browser-based crawling
+- Multi-target orchestration
+- Agentic bounded-loop execution
+- Extension system implementation
+- External tool integrations
+- Web3 scanning
+- Mobile scanning
+- Knowledge / persistence layer
+- Dashboard / UI
+
+Order is determined by the intake process, not by this document.
+
+---
+
+## 11. Baseline & KPIs
+
+### 11.1 Principle
+
+Every meaningful capability change is preceded by a **baseline measurement** of the affected metric, and followed by a comparison against it.
+
+### 11.2 What this means
+
+- No capability is declared "better" without a benchmark.
+- No claim of "faster" or "more accurate" without a baseline.
+- Numbers stated in strategy or marketing must be reproducible from a run.
+
+### 11.3 Candidate metrics
+
+Metrics are chosen per phase, not fixed globally. Candidates include:
+
+- False positive rate
+- True positive detection rate
+- Scan duration
+- Throughput (URLs per unit time)
+- Maximum practical target size
+- Coverage per vulnerability class
+- Verification coverage
+
+### 11.4 Rule
+
+A metric without a reproducible measurement method is not a metric. It is a wish.
+
+---
+
+## 12. Decision Log
+
+Every substantial architectural or strategic decision is recorded — not just made.
+
+### 12.1 What a decision record contains
+
+- Date
+- Decision
+- Reason
+- Alternatives considered
+- Status (accepted / rejected / deferred)
+- Consequences
+
+### 12.2 Where it lives
+
+Where the decision log lives is an implementation decision. What matters is that it exists, and that it is updated when a decision is made or reversed.
+
+### 12.3 Why
+
+- Prevents re-litigating settled questions.
+- Preserves context for future contributors (human and AI).
+- Makes reversals explicit and auditable.
+
+---
+
+## 13. Non-Goals
+
+ARFA does not pursue the following, absent a specific reversal recorded in the decision log:
+
+1. **Rewriting the core to chase a competitor's feature.** Capabilities are added around the core, not by replacing it.
+2. **Copying another tool's implementation.** Capabilities are understood, not copied.
+3. **Claiming superiority without a benchmark.** Every claim is measurable.
+4. **Opening new phases while the current phase is open.** Phase discipline is non-negotiable.
+5. **Changing the core contract in a phase that did not request it.** Contract changes require explicit approval.
+6. **Implementing future capabilities prematurely.** Architecture allows them; phases schedule them.
+7. **Treating the architecture as a to-do list.** Architecture is direction; phases are work.
+
+---
+
+## 14. Rules for Claude (and Other AI Assistants)
+
+When Claude or another AI assistant works on ARFA, the following rules apply.
+
+### 14.1 Before any substantial work
+
+1. Read `ARCHITECTURE.md`, `ARFA_MASTER_CONTEXT.md`, and this document.
+2. Read the actual source code relevant to the task.
+3. Confirm the current phase and its scope.
+4. Confirm no other phase is open.
+
+### 14.2 During work
+
+1. Do not modify the Stable Core without explicit approval.
+2. Do not restructure the repository to match a conceptual model in a document.
+3. Do not implement capabilities that are not part of the current phase.
+4. Do not create backups, `.bak` folders, or duplicate project copies. Git is the recovery mechanism.
+5. Do not invent capabilities and claim they exist. If something is not verified in the code, it does not exist.
+
+### 14.3 After work
+
+1. Run all relevant tests.
+2. Report exact commands and results.
+3. Never claim a test passed if it was not run.
+4. Never claim a capability exists if it is not verified in the repository.
+5. Commit only after validation.
+6. Do not merge to `main` without explicit instruction.
+
+### 14.4 When in doubt
+
+Ask. Architectural decisions belong to the human owner, not to the assistant.
+
+---
+
+## 15. Future Capability Intake
+
+ARFA will receive new capability ideas continuously — during development, after release, and years into the future. This section defines how such ideas are handled.
+
+### 15.1 The intake process
+
+```
+New capability proposed
+        ↓
+Architecture fit?         — Does it belong in ARFA at all?
+        ↓
+Core change or Extension? — Can it be added without touching the core?
+        ↓
+Dependencies?             — What does it require from other parts?
+        ↓
+Security / isolation?     — Does it introduce new trust boundaries?
+        ↓
+Evidence / provenance?    — How does it affect finding traceability?
+        ↓
+Roadmap placement         — Where does it sit in the ordering?
+        ↓
+Phase implementation      — When does it actually get built?
+```
+
+### 15.2 Rules
+
+- A capability is not rejected merely because it is large.
+- A capability is not accepted into implementation merely because it is attractive.
+- Every accepted capability enters the architecture first, then the roadmap, then a phase — in that order.
+- **A capability may be added to the architecture without being added to the current phase.**
+- No capability skips the intake process.
+- The output of intake is a decision record (§12).
+
+### 15.3 What this achieves
+
+- New ideas are not lost.
+- New ideas are not rushed.
+- The architecture grows steadily, without rewrites.
+- Every contributor — human or AI — knows exactly where a new idea belongs.
+
+---
+
+## 16. Source of Truth
+
+When documents disagree, the following order applies:
+
+1. **The actual source code** — what is implemented and verified.
+2. **`ARFA_MASTER_CONTEXT.md`** — current state, closed milestones, active phases.
+3. **`ARCHITECTURE.md`** — complete architectural design.
+4. **`PLATFORM_STRATEGY.md`** (this document) — long-term vision and principles.
+
+Strategy never overrides architecture.
+Architecture never overrides state.
+State never overrides code.
+
+---
+
+## 17. Closing Principle
+
+> **ARFA does not start small. ARFA plans for the product it intends to become, and builds it incrementally with strict engineering discipline.**
+
+Every decision in this document serves that principle:
+
+- The core is stable, so extensions can grow safely.
+- The extension model is defined, so new capabilities have a home.
+- Integration is architectural, so tools are partners, not threats.
+- Provenance is first-class, so findings are defensible.
+- Versioning is disciplined, so the platform does not break as it grows.
+- Intake is defined, so new ideas are neither lost nor rushed.
+
+This is what it means to design for the scale of tomorrow's product — while building with the discipline of today.
+
+---
+
+**End of PLATFORM_STRATEGY.md**
