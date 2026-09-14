@@ -245,9 +245,9 @@ Completed and frozen:
 - TD #10 — XSS CONFIRMED Semantics
 - TD #14 — Risk Scoring Calibration
 - TD #3 — URL canonicalization
+- TD #1 — Crawler regex/GET orientation
 
 Remaining open:
-- TD #1 — Crawler regex/GET orientation
 - TD #2 — Forms / POST discovery
 - TD #4 — Deterministic endpoint ordering
 - TD #5 — Fallback parameter noise
