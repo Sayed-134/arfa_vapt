@@ -312,6 +312,21 @@ ARFA does not exclude integration with any tool merely because that tool is stro
 
 Each integration is evaluated on its value to ARFA and its cost.
 
+### 5.5 Knowledge Sources (Future)
+
+External datasets and curated knowledge sources are classified as **future knowledge sources**. They are not ingested into the current scanner, the Python AI Engine, or the pipeline.
+
+Classification:
+
+- **HackerOne reports** → future vulnerability knowledge / evidence-derived knowledge
+- **Bug bounty skills / methodologies** → future methodology / skills knowledge
+- **Other datasets** → candidate knowledge sources
+- **Mobile pentest toolkit** → future / mobile capability candidate
+
+Ingestion, indexing, retrieval-augmented generation (RAG), training, and integration with the AI Engine are **explicitly deferred**. No ingestion pipeline is implemented until the Knowledge Layer (see §10.5) enters a future phase.
+
+External knowledge sources serve the future Knowledge Layer. They do not replace evidence, and they do not override provenance. Every finding produced with knowledge-layer assistance remains an ARFA finding with its own provenance (§6).
+
 ---
 
 ## 6. Evidence Provenance
@@ -487,6 +502,7 @@ After the current phase closes, capability work proceeds through the intake proc
 - Web3 scanning
 - Mobile scanning
 - Knowledge / persistence layer
+- **Knowledge Layer (Zetsu)** — a future knowledge and methodology layer providing structured access to security methodologies, skills, vulnerability reports, external datasets, and other curated knowledge sources. Intended to support analysis, correlation, planning, verification, and future agentic decision-making, while preserving provenance and evidence boundaries. Implementation is deferred to a future phase.
 - Dashboard / UI
 
 Order is determined by the intake process, not by this document.
@@ -538,13 +554,31 @@ Every substantial architectural or strategic decision is recorded — not just m
 
 ### 12.2 Where it lives
 
-Where the decision log lives is an implementation decision. What matters is that it exists, and that it is updated when a decision is made or reversed.
+The decision log lives in `PLATFORM_STRATEGY.md`, under this section. It is part of the strategic reference and is updated when a decision is made, reversed, or materially changed.
 
 ### 12.3 Why
 
 - Prevents re-litigating settled questions.
 - Preserves context for future contributors (human and AI).
 - Makes reversals explicit and auditable.
+
+### 12.4 Recorded decisions
+
+**2026-09-14 — Zetsu and external knowledge sources documented**
+
+- **Decision:** Zetsu is documented as a future architectural layer. External datasets (HackerOne reports, bug bounty methodologies, other curated sources) are classified as future knowledge sources.
+- **Reason:** Zetsu is a substantive part of the intended platform, not a passing idea. It belongs in the strategic vision so that future contributors (human and AI) know it has an architectural home.
+- **Alternatives considered:**
+  - Decision Log entry only — rejected. Zetsu is architectural, not merely a decision.
+  - Build Zetsu now — rejected. Violates phase discipline.
+- **Status:** accepted (documentation only; no implementation)
+- **Consequences:**
+  - `PLATFORM_STRATEGY.md` gains an explicit Zetsu entry (§10.5)
+  - `PLATFORM_STRATEGY.md` gains §5.5 Knowledge Sources (Future)
+  - External datasets remain outside the repository, retained as future materials
+  - No ingestion, no RAG, no training, no AI Engine integration
+  - No new phase is opened
+  - Implementation is deferred to a future phase
 
 ---
 
