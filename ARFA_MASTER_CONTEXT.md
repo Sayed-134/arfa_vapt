@@ -9,7 +9,7 @@ Target → Scope → Scan Job → Preflight → Discovery → Crawling → Endpo
 ## 2. Repository and baseline
 GitHub: Sayed-134/arfa_vapt
 Local project: `~/arfa_milestone_test/arfa_v2_test`
-Main: `ce5dfa0 — feat: establish milestone 1 scan contract and regression`
+Main: `94cf2fa — docs: calibrate risk scoring with verification rationale`
 Expected state: `main == origin/main`, working tree clean.
 Milestone 1 branch retained: `feature/milestone-1-foundation-contract-regression`
 
@@ -40,7 +40,7 @@ Verified Quick Scan:
 - Findings: 3
 - Requests: 1111
 - Duration: ~1351 ms
-- Adaptive budget: 10/10
+- Adaptive budget: 20/20
 - SQLi: CONFIRMED
 - XSS: CONFIRMED
 - LFI: CONFIRMED
@@ -67,7 +67,7 @@ Verification states are preserved, including:
 
 Python must not silently reinterpret Go verification facts.
 
-## 7. Milestone 1
+## 7. Milestone 1 — CLOSED
 Commit: `ce5dfa0`
 Scope: Foundation Contract + Regression.
 
@@ -98,14 +98,14 @@ E2E validated reachable localhost target, SQLi/XSS/LFI, CONFIRMED verification, 
 4. Endpoint ordering should be deterministic.
 5. Fallback parameters can increase noise.
 6. Payload corpus needs structured metadata/versioning.
-7. Deep scans can materialize too many jobs in memory.
+7. Deep scans can materialize too many jobs in memory. — CLOSED
 8. Rate limiter should become a true global/cancellable policy.
 9. Probe evidence should preserve complete relevant request/response context.
-10. XSS CONFIRMED currently means reproducible reflection/control evidence, not proof of JavaScript execution.
+10. XSS CONFIRMED currently means reproducible reflection/control evidence, not proof of JavaScript execution. — CLOSED
 11. IDOR remains heuristic until authenticated principal/session context exists.
 12. History storage needs stronger persistence/locking/retention design.
 13. Attack-chain detection is currently rule/co-occurrence based.
-14. Risk scoring needs documented calibration using verification/context.
+14. Risk scoring needs documented calibration using verification/context. — CLOSED
 15. LLM input/output needs redaction, allowlisting, auditing, schema validation, and prompt-injection defenses.
 16. Payload corpus reproducibility/versioning needs improvement.
 
@@ -165,29 +165,8 @@ For every substantial milestone:
 Do not develop large changes directly on main.
 Do not keep duplicate project copies.
 
-## 14. Next milestone
-Milestone 2 — Execution + Evidence + Coverage.
-
-Implement as one cohesive, bounded milestone:
-1. bounded job scheduling
-2. Crawler interface
-3. Probe/Transport interface
-4. Detector interface
-5. Verifier interface
-6. structured Evidence model
-7. coverage tracking
-8. deterministic next-action planner API
-9. additive ScanEnvelope/Finding extensions only
-10. regression tests
-11. local E2E validation
-
-Do NOT include in this milestone:
-- GUI expansion
-- Web3 scanner
-- Burp/MITMProxy integration
-- large LLM agent orchestration
-- mass detector rewrites
-- unrelated new vulnerability families
+## 14. Current milestone
+Phase 4 — Technical Debt (IN PROGRESS).
 
 ## 15. Agent instructions
 Before architectural changes, read this file and inspect the actual repository.
@@ -218,3 +197,67 @@ Deterministic Scanner + Evidence/Verification Engine + Intelligence Layer + Boun
 
 Key differentiator:
 When one technique fails, the AI should reason from coverage and evidence to select another appropriate next action, rather than simply stopping. Scope, authorization, verification, and evidence remain authoritative.
+
+## 18. Completed Work — Historical Record
+
+### Phase 1 — Foundation & Contracts — CLOSED / FROZEN
+Implemented and validated:
+- Versioned ScanEnvelope contract
+- Authorization and scope contract
+- Configuration integration
+- `-config` and `-timeout`
+- Go/Python contract fixtures and regression coverage
+- E2E regression
+- GitHub Actions CI
+
+Do not reopen or redesign Phase 1 without explicit user approval.
+
+### Phase 2 — Execution & Evidence — CLOSED / FROZEN
+Implemented and validated:
+- Bounded job scheduling
+- Crawler / Probe / Detector / Verifier interfaces
+- Structured Evidence model
+- Endpoint × Parameter × Vulnerability coverage tracking
+- Deterministic next-action planner
+- Additive ScanEnvelope/Finding extensions
+- Regression tests
+- Local E2E validation
+
+Do not reopen or redesign Phase 2 without explicit user approval.
+
+### Phase 3 — Verification Data Flow & Confidence — CLOSED / FROZEN
+Implemented and validated:
+- Detection → Verification → Evidence Collection → FP Check → Confidence → Finding
+- Bounded verification retry (`maxProbeAttempts=2`)
+- Repeat/control probe
+- Verification cache and single-flight behavior
+- Concurrency/race coverage
+- `Finding.VerificationConfidence`
+- `Finding.VerificationConfidenceReason`
+- JSON/HTML report integration for evidence and verification confidence
+
+Do not reopen or redesign Phase 3 without explicit user approval.
+
+### Phase 4 — Technical Debt — IN PROGRESS
+
+Completed and frozen:
+- TD #7 — Bounded Scan Duration
+- TD #10 — XSS CONFIRMED Semantics
+- TD #14 — Risk Scoring Calibration
+
+Remaining open:
+- TD #1 — Crawler regex/GET orientation
+- TD #2 — Forms / POST discovery
+- TD #3 — URL canonicalization
+- TD #4 — Deterministic endpoint ordering
+- TD #5 — Fallback parameter noise
+- TD #6 — Payload corpus structured metadata/versioning
+- TD #8 — Global/cancellable rate limiter policy
+- TD #9 — Complete relevant probe request/response evidence
+- TD #11 — IDOR authenticated principal/session context
+- TD #12 — History storage persistence/locking/retention
+- TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
+- TD #15 — LLM Input/Output Redaction
+- TD #16 — Payload corpus reproducibility/versioning
+
+Current phase remains open until all required Phase 4 work is completed.
