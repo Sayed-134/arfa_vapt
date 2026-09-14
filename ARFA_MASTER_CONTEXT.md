@@ -92,22 +92,21 @@ Validation:
 E2E validated reachable localhost target, SQLi/XSS/LFI, CONFIRMED verification, Python 3 input/3 unique, posture 40.0.
 
 ## 8. Remaining technical debt
-1. Crawler is regex/GET oriented.
-2. Forms and POST discovery need proper support.
-3. URL canonicalization needs strengthening.
-4. Endpoint ordering should be deterministic.
-5. Fallback parameters can increase noise.
-6. Payload corpus needs structured metadata/versioning.
-7. Deep scans can materialize too many jobs in memory. — CLOSED
-8. Rate limiter should become a true global/cancellable policy.
-9. Probe evidence should preserve complete relevant request/response context.
-10. XSS CONFIRMED currently means reproducible reflection/control evidence, not proof of JavaScript execution. — CLOSED
-11. IDOR remains heuristic until authenticated principal/session context exists.
-12. History storage needs stronger persistence/locking/retention design.
-13. Attack-chain detection is currently rule/co-occurrence based.
-14. Risk scoring needs documented calibration using verification/context. — CLOSED
-15. LLM input/output needs redaction, allowlisting, auditing, schema validation, and prompt-injection defenses.
-16. Payload corpus reproducibility/versioning needs improvement.
+1. Crawler GET-only discovery — POST/form support pending (TD #2). HTML parsing is now HTML5-based (TD #1 CLOSED).
+2. URL canonicalization needs strengthening.
+3. Endpoint ordering should be deterministic.
+4. Fallback parameters can increase noise.
+5. Payload corpus needs structured metadata/versioning.
+6. Deep scans can materialize too many jobs in memory. — CLOSED
+7. Rate limiter should become a true global/cancellable policy.
+8. Probe evidence should preserve complete relevant request/response context.
+9. XSS CONFIRMED currently means reproducible reflection/control evidence, not proof of JavaScript execution. — CLOSED
+10. IDOR remains heuristic until authenticated principal/session context exists.
+11. History storage needs stronger persistence/locking/retention design.
+12. Attack-chain detection is currently rule/co-occurrence based.
+13. Risk scoring needs documented calibration using verification/context. — CLOSED
+14. LLM input/output needs redaction, allowlisting, auditing, schema validation, and prompt-injection defenses.
+15. Payload corpus reproducibility/versioning needs improvement.
 
 ## 9. Core architecture rule
 Go is the source of truth for scanner facts, verification, evidence, and scan metadata.
@@ -245,7 +244,7 @@ Completed and frozen:
 - TD #10 — XSS CONFIRMED Semantics
 - TD #14 — Risk Scoring Calibration
 - TD #3 — URL canonicalization
-- TD #1 — Crawler regex/GET orientation
+- TD #1 — Crawler HTML parsing robustness
 
 Remaining open:
 - TD #2 — Forms / POST discovery
