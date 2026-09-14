@@ -1,0 +1,152 @@
+{
+  "task": "TD #1 pre-implementation baseline",
+  "commit_hash": "933309e9a131839ec21c543d58a45380b0525251",
+  "commit_dirty": false,
+  "generated_at": "2026-09-14T08:08:32Z",
+  "config": {
+    "target": "http://127.0.0.1:18080",
+    "mode": "quick",
+    "workers": 20,
+    "rate": 100.0,
+    "max_pages": 30
+  },
+  "runs": [
+    {
+      "run": 1,
+      "wall_clock_ms": 692,
+      "schema_version": "arfa.scan/v1",
+      "mode": "quick",
+      "reachability_status": "reachable",
+      "stats": {
+        "pages": 5,
+        "endpoints": 4,
+        "parameters": 4,
+        "requests": 1111,
+        "errors": 0,
+        "duration_ms": 647,
+        "adaptive_budget": 20,
+        "jobs_planned": 980,
+        "jobs_capped": false,
+        "time_budget_exhausted": false
+      },
+      "findings_count": 3,
+      "findings_by_category": [
+        "LFI",
+        "SQLi",
+        "XSS"
+      ],
+      "coverage_entries": 40,
+      "next_actions_count": 0
+    },
+    {
+      "run": 2,
+      "wall_clock_ms": 696,
+      "schema_version": "arfa.scan/v1",
+      "mode": "quick",
+      "reachability_status": "reachable",
+      "stats": {
+        "pages": 5,
+        "endpoints": 4,
+        "parameters": 4,
+        "requests": 1111,
+        "errors": 0,
+        "duration_ms": 645,
+        "adaptive_budget": 20,
+        "jobs_planned": 980,
+        "jobs_capped": false,
+        "time_budget_exhausted": false
+      },
+      "findings_count": 3,
+      "findings_by_category": [
+        "LFI",
+        "SQLi",
+        "XSS"
+      ],
+      "coverage_entries": 40,
+      "next_actions_count": 0
+    },
+    {
+      "run": 3,
+      "wall_clock_ms": 726,
+      "schema_version": "arfa.scan/v1",
+      "mode": "quick",
+      "reachability_status": "reachable",
+      "stats": {
+        "pages": 5,
+        "endpoints": 4,
+        "parameters": 4,
+        "requests": 1111,
+        "errors": 0,
+        "duration_ms": 650,
+        "adaptive_budget": 20,
+        "jobs_planned": 980,
+        "jobs_capped": false,
+        "time_budget_exhausted": false
+      },
+      "findings_count": 3,
+      "findings_by_category": [
+        "LFI",
+        "SQLi",
+        "XSS"
+      ],
+      "coverage_entries": 40,
+      "next_actions_count": 0
+    }
+  ],
+  "summary": {
+    "requests": {
+      "min": 1111,
+      "max": 1111,
+      "mean": 1111.0,
+      "median": 1111,
+      "n": 3
+    },
+    "duration_ms": {
+      "min": 645,
+      "max": 650,
+      "mean": 647.33,
+      "median": 647,
+      "n": 3
+    },
+    "wall_clock_ms": {
+      "min": 692,
+      "max": 726,
+      "mean": 704.67,
+      "median": 696,
+      "n": 3
+    },
+    "findings_count": {
+      "min": 3,
+      "max": 3,
+      "mean": 3.0,
+      "median": 3,
+      "n": 3
+    },
+    "coverage_entries": {
+      "min": 40,
+      "max": 40,
+      "mean": 40.0,
+      "median": 40,
+      "n": 3
+    },
+    "adaptive_budget": {
+      "min": 20,
+      "max": 20,
+      "mean": 20.0,
+      "median": 20,
+      "n": 3
+    },
+    "jobs_planned": {
+      "min": 980,
+      "max": 980,
+      "mean": 980.0,
+      "median": 980,
+      "n": 3
+    }
+  },
+  "non_deterministic_fields_observed": [],
+  "notes": [
+    "Metrics limited to fields verified present in scan_results.json; see docs/baselines/README.md for the full inspection record.",
+    "max_pages, workers, rate and timeout are scan CONFIGURATION inputs, not scan OUTPUT \u2014 they are not echoed into scan_results.json and are recorded here from the invocation, not parsed from the report."
+  ]
+}
