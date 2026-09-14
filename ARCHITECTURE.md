@@ -114,7 +114,7 @@ This data contract is part of the completed foundation and must remain backward-
 
 ---
 
-# 4. Milestone 1 — Completed and Locked
+# 4. Milestone 1 — Completed and Locked — CLOSED
 
 Milestone 1 established the foundational scan contract and regression behavior.
 
@@ -152,7 +152,7 @@ Any future change affecting the Milestone 1 scan contract requires explicit arch
 
 ---
 
-# 5. Milestone 2 — Completed Locally
+# 5. Milestone 2 — Completed Locally — CLOSED
 
 Milestone 2 extends the execution model with evidence, coverage, deterministic planning, and adaptive execution controls.
 
@@ -234,7 +234,7 @@ Any change to those contracts requires explicit approval.
 
 ---
 
-# 6. Python AI Engine — Completed
+# 6. Python AI Engine — Completed — CLOSED
 
 The Python AI Engine consumes results produced by the Go scanning core.
 
@@ -259,7 +259,7 @@ Local regression includes:
 
 ---
 
-# 7. Current Phase — Verification Data Flow
+# 7. Verification Data Flow — CLOSED
 
 The current implementation phase is:
 
@@ -736,7 +736,7 @@ This represents the long-term architecture and must not be interpreted as a requ
 
 Implementation is intentionally phased.
 
-## Phase 1 — Verification Data Flow
+## Phase 1 — Verification Data Flow — CLOSED
 
 **Current phase.**
 
