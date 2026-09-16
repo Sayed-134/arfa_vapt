@@ -504,6 +504,7 @@ After the current phase closes, capability work proceeds through the intake proc
 - Knowledge / persistence layer
 - **Knowledge Layer (Zetsu)** — a future knowledge and methodology layer providing structured access to security methodologies, skills, vulnerability reports, external datasets, and other curated knowledge sources. Intended to support analysis, correlation, planning, verification, and future agentic decision-making, while preserving provenance and evidence boundaries. Implementation is deferred to a future phase.
 - Dashboard / UI
+- **Extended HTTP capabilities** — multipart / file upload, JSON request bodies, PUT / PATCH / DELETE, cookies / session-aware requests, CSRF handling, GraphQL, WebSocket. Recorded as future candidates; not scheduled, not TDs, and not part of any current phase.
 
 Order is determined by the intake process, not by this document.
 
@@ -579,6 +580,71 @@ The decision log lives in `PLATFORM_STRATEGY.md`, under this section. It is part
   - No ingestion, no RAG, no training, no AI Engine integration
   - No new phase is opened
   - Implementation is deferred to a future phase
+
+---
+
+**2026-09-16 — TD #2 Endpoint Identity & Form Parameter Transport**
+
+- **Decision:**
+  TD #2 establishes first-class GET and POST
+  (`application/x-www-form-urlencoded`) form support within its defined scope,
+  while preserving GET backward compatibility and maintaining an execution
+  boundary that can accommodate future HTTP methods and body types without
+  requiring redesign of the scanner/detector pipeline.
+
+- **Endpoint Identity:**
+  `(URL, Method)` is the Endpoint identity.
+  - Same URL + same Method → one endpoint; parameters are unioned and deduplicated.
+  - Same URL + different Method → separate endpoints.
+
+- **Parameter Transport:**
+  - GET  → `Parameters` → query string
+  - POST → `FormParameters` → `application/x-www-form-urlencoded` body
+
+- **In Scope:**
+  - GET/POST form discovery
+  - Form field extraction (`input` / `textarea` / `select`)
+  - Method-aware request construction
+  - Form field → job/coverage integration
+  - Tests and regression protection
+
+- **Out of Scope (recorded in the Future Capability Roadmap):**
+  - multipart / file upload
+  - JSON request bodies
+  - PUT / PATCH / DELETE
+  - Cookies / session-aware requests
+  - CSRF handling
+  - GraphQL
+  - WebSocket
+
+- **Reason:**
+  GET-only discovery is insufficient for meaningful web VAPT coverage.
+  TD #2 establishes POST form-urlencoded as a first-class capability while
+  keeping the HTTP execution boundary suitable for future extension.
+
+- **Alternatives Considered:**
+  - Minimal implementation (`Do(url, params)` + method-specific conditionals) —
+    rejected as too tightly coupled to the current query-only transport.
+  - Full abstraction (`BodyStrategy`, `JSONBodyStrategy`, etc.) —
+    rejected as premature abstraction.
+  - **Minimal Scope + Professional Foundation** — accepted.
+
+- **Status:**
+  Accepted — implementation pending HTTP Client Audit and the resulting
+  Architecture/Implementation Decision.
+
+- **Consequences:**
+  - Endpoint map identity changes from URL → `(URL, Method)`.
+  - `effectiveParams` becomes method-aware.
+  - `rawProbe` becomes method-aware.
+  - `httpclient.Do()` may require a backward-compatible extension; exact shape
+    will be decided after the HTTP Client Audit.
+  - No new dependency is expected.
+  - No completed Phase or TD is reopened.
+
+- **Future Capability Roadmap reference:**
+  The "Out of Scope" items above are recorded in
+  `PLATFORM_STRATEGY.md §10.5 — Extended HTTP capabilities`.
 
 ---
 
