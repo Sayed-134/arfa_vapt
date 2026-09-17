@@ -264,3 +264,13 @@ Remaining open:
 - TD #16 — Payload corpus reproducibility/versioning
 
 Current phase remains open until all required Phase 4 work is completed.
+
+## Future Platform Boundaries — Locked Direction
+
+The platform foundation is intentionally designed for the future product while implementation remains incremental.
+
+Future Traffic/Input Adapters, Observation/Differential Analysis, OOB Interaction Adapters, and Headless Browser Adapters are architectural boundaries only at this stage.
+
+They must preserve authorization/scope, `(URL, Method)` endpoint identity, existing verification semantics, evidence/provenance, and core independence from external tools.
+
+No implementation of these capabilities is part of TD #5 or the current documentation update.

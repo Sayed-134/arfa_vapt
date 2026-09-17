@@ -1037,3 +1037,16 @@ Every change must be:
 * Compatible with existing contracts
 
 **ARFA VAPT must grow by extending the verified foundation, not by repeatedly rewriting it.**
+
+## Future Input & Observation Boundaries
+
+The future platform reserves four additive boundaries:
+
+1. **Traffic / Input Adapter** — normalize HAR, Burp, mitmproxy, and other external request/response sources without making external formats core models.
+2. **Observation / Differential Analysis** — compare baseline/test observations and produce analysis signals; signals do not become findings by themselves.
+3. **OOB Interaction Adapter** — consume external OOB interaction events and correlate them with the originating authorized probe before Verification/Evidence.
+4. **Headless Browser Adapter** — provide Playwright/Chromium-based JavaScript, SPA, DOM, and browser observations as a supplement to the deterministic crawler.
+
+All boundaries preserve authorization/scope, `(URL, Method)` endpoint identity, verification semantics, evidence/provenance, and core independence from external tools.
+
+These are architectural boundaries only. No implementation or dependency is introduced by this section.
