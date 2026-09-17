@@ -5,6 +5,7 @@ import (
 	"arfa/pkg/models"
 	"context"
 	"net/url"
+	"sort"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -275,12 +276,24 @@ func (c *Crawler) Crawl(ctx context.Context, target string) ([]models.Endpoint, 
 		// GET endpoint for the page itself: query-string keys from the
 		// endpoint's own URL, followed by name attributes discovered
 		// anywhere on the page (unchanged from before TD #2).
+		// TD #4: url.Values (returned by Query()) is a map, and Go map
+		// iteration order is randomized per range - collecting its keys
+		// directly would make this GET endpoint's Parameters order (and
+		// therefore its downstream job order) non-deterministic across
+		// runs even though nothing about the page or the crawl itself
+		// changed. Sorting the keys here is the minimal fix: it only
+		// affects the order query-string parameter names are appended in,
+		// never which parameters are discovered.
 		p := []string{}
 		pageURL, pageURLErr := url.Parse(u)
 		if pageURLErr == nil {
-			for k := range pageURL.Query() {
-				p = append(p, k)
+			q := pageURL.Query()
+			keys := make([]string, 0, len(q))
+			for k := range q {
+				keys = append(keys, k)
 			}
+			sort.Strings(keys)
+			p = append(p, keys...)
 		}
 		p = append(p, names...)
 		p = uniq(p)
@@ -337,10 +350,29 @@ func (c *Crawler) Crawl(ctx context.Context, target string) ([]models.Endpoint, 
 		eps[t+"\x00GET"] = models.Endpoint{URL: t, Method: "GET"}
 	}
 
+	// TD #4: eps is a map keyed by canonical URL + method (TD #2 endpoint
+	// identity), so ranging over it directly - as the pre-TD-#4 code did -
+	// hands back Endpoints in Go's randomized map-iteration order. That
+	// randomness then propagates into every downstream consumer that walks
+	// the returned slice in order: Scanner.Scan's coverage seeding, job
+	// scheduling (walkJobs/streamJobs), and Stats.Endpoints/Parameters
+	// counting - making two runs against an identical target produce
+	// different job execution orders and, with a tight MaxJobs/MaxDuration
+	// cap, even different sets of jobs actually run. Sorting here by
+	// (URL, Method) is the single point that fixes this for every
+	// consumer at once, without changing endpoint identity, discovery
+	// logic, or which endpoints are found - only the order they are
+	// returned in.
 	out := make([]models.Endpoint, 0, len(eps))
 	for _, e := range eps {
 		out = append(out, e)
 	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].URL != out[j].URL {
+			return out[i].URL < out[j].URL
+		}
+		return out[i].Method < out[j].Method
+	})
 	return out, len(seen), nil
 }
 
