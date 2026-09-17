@@ -791,3 +791,16 @@ This is what it means to design for the scale of tomorrow's product — while bu
 ---
 
 **End of PLATFORM_STRATEGY.md**
+
+## Architectural Boundary Clarification — Future Input & Observation
+
+The future platform direction explicitly treats the following as additive adapter/analysis boundaries:
+
+- **Traffic / Input Adapters:** HAR, Burp, mitmproxy/proxy traffic, and other external request/response sources are normalized at an adapter boundary and must not become core data models.
+- **Observation / Differential Analysis:** baseline and test observations may be compared using status, headers, length, timing, reflection, and behavioral differences. These differences are analysis signals, not findings by themselves.
+- **OOB Interaction Adapter:** external OOB providers may return interaction events correlated to the originating authorized probe before Verification/Evidence. The core does not implement an OOB server.
+- **Headless Browser Adapter:** Playwright/Chromium may provide JavaScript/SPA discovery, DOM observations, and browser-assisted verification as an additional Discovery/Observation capability. It supplements, rather than replaces, the deterministic crawler.
+
+All four boundaries preserve authorization/scope, `(URL, Method)` endpoint identity, existing verification semantics, evidence/provenance, and core independence from any specific external tool or runtime.
+
+These are architectural boundaries only; implementation remains deferred to its appropriate future phase.
