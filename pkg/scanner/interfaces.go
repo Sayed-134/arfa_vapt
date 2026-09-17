@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"arfa/pkg/httpclient"
 	"arfa/pkg/models"
 	"arfa/pkg/verification"
 )
@@ -21,8 +22,13 @@ type CrawlerIface interface {
 // Transport is the subset of *httpclient.Client the Scanner needs to issue
 // a probe. Same rationale as CrawlerIface: httpclient.Client already
 // satisfies this signature unmodified, so wiring it in is purely additive.
+//
+// TD #2: Do takes an httpclient.Request (rather than a flat method/url/
+// params map) so a single call site can express either GET query-string
+// transport or POST form-urlencoded body transport - see
+// httpclient.Request's doc comment.
 type Transport interface {
-	Do(ctx context.Context, method, rawURL string, params map[string]string) (string, int, http.Header, time.Duration, error)
+	Do(ctx context.Context, r httpclient.Request) (string, int, http.Header, time.Duration, error)
 }
 
 // Verifier is the subset of the verification package's behavior the

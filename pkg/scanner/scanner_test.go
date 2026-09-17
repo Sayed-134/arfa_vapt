@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"arfa/pkg/detectors"
+	"arfa/pkg/httpclient"
 	"arfa/pkg/models"
 )
 
@@ -84,13 +85,15 @@ func (f fakeCrawler) Crawl(ctx context.Context, target string) ([]models.Endpoin
 }
 
 type fakeTransport struct {
-	calls  int
-	body   string
-	status int
+	calls    int
+	body     string
+	status   int
+	requests []httpclient.Request // every request seen, in order - lets tests assert exactly what was sent
 }
 
-func (f *fakeTransport) Do(ctx context.Context, method, rawURL string, params map[string]string) (string, int, http.Header, time.Duration, error) {
+func (f *fakeTransport) Do(ctx context.Context, r httpclient.Request) (string, int, http.Header, time.Duration, error) {
 	f.calls++
+	f.requests = append(f.requests, r)
 	return f.body, f.status, http.Header{}, time.Millisecond, nil
 }
 

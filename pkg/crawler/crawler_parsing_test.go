@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"arfa/pkg/httpclient"
+	"arfa/pkg/models"
 )
 
 // serveHTML starts an httptest server that returns the given HTML body for
@@ -109,7 +110,7 @@ func TestParsePage_LinkDiscovery_QuotedAndUnquoted(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			links, _ := parsePage(tc.body)
+			links, _, _ := parsePage(tc.body)
 			sort.Strings(links)
 			sort.Strings(tc.want)
 			if !equalStrings(links, tc.want) {
@@ -123,7 +124,7 @@ func TestParsePage_LinkDiscovery_QuotedAndUnquoted(t *testing.T) {
 // strip fragments - canonicalization is responsible for that (see
 // canonicalOrOriginal). The raw parsed value must keep "#section".
 func TestParsePage_FragmentPreservedInParsedValue(t *testing.T) {
-	links, _ := parsePage(`<a href="/path#section">x</a>`)
+	links, _, _ := parsePage(`<a href="/path#section">x</a>`)
 	if len(links) != 1 || links[0] != "/path#section" {
 		t.Fatalf("expected raw parsed href to preserve fragment, got %v", links)
 	}
@@ -202,7 +203,7 @@ func TestParsePage_NameDiscovery(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			_, names := parsePage(tc.body)
+			_, names, _ := parsePage(tc.body)
 			sort.Strings(names)
 			sort.Strings(tc.want)
 			if !equalStrings(names, tc.want) {
@@ -271,7 +272,7 @@ func TestParsePage_MalformedButParseable(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			links, names := parsePage(tc.body)
+			links, names, _ := parsePage(tc.body)
 			sort.Strings(links)
 			sort.Strings(tc.wantLinks)
 			sort.Strings(names)
@@ -313,41 +314,111 @@ func TestCrawl_UnquotedHrefIsFollowed(t *testing.T) {
 	}
 }
 
-// TestCrawl_MethodIsAlwaysGET guards TD #1's explicit non-goal: the
-// crawler must never emit a non-GET endpoint. This is the boundary between
-// TD #1 (parsing) and TD #2 (POST/form support).
-func TestCrawl_MethodIsAlwaysGET(t *testing.T) {
-	body := `<html><body>
-		<a href="/a">a</a>
-		<form action="/b" method="post"><input name="x"></form>
-		<a href="/c">c</a>
-	</body></html>`
-	srv, run := serveHTML(t, body)
-	_ = srv
-	names, _ := run(t)
+// TestCrawl_FormMethodDeterminesEndpointMethod replaces the old
+// TestCrawl_MethodIsAlwaysGET. That test guarded TD #1's explicit non-goal
+// ("the crawler must never emit a non-GET endpoint") and said so in its own
+// doc comment: "This is the boundary between TD #1 (parsing) and TD #2
+// (POST/form support)." TD #2 is exactly the work that moves that
+// boundary, so the old blanket assertion is no longer valid by design -
+// this test replaces it with the new contract:
+//   - a form explicitly declaring method="get" (or omitting method)
+//     produces a GET endpoint at its action URL, params in Parameters;
+//   - a form explicitly declaring method="post" produces a POST endpoint
+//     at its action URL, fields in FormParameters, never in Parameters;
+//   - the page's own GET endpoint (page-level parameter aggregation, see
+//     parsePage) remains GET, unaffected by any form on the page;
+//   - therefore "every discovered endpoint is GET" is no longer true, and
+//     this test asserts the opposite - at least one non-GET endpoint
+//     exists - as the direct replacement for the old assertion.
+func TestCrawl_FormMethodDeterminesEndpointMethod(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><body>
+			<form action="/search" method="get"><input name="q"></form>
+			<form action="/submit" method="post"><input name="x"></form>
+		</body></html>`))
+	})
+	mux.HandleFunc("/search", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><body>no further links or forms here</body></html>`))
+	})
+	mux.HandleFunc("/submit", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><body>no further links or forms here</body></html>`))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
 
-	// Re-crawl and check methods explicitly.
 	hc := httpclient.New(2 * time.Second)
 	c := New(hc, 10)
 	eps, _, err := c.Crawl(context.Background(), srv.URL+"/")
 	if err != nil {
 		t.Fatalf("Crawl error: %v", err)
 	}
+
+	byKey := map[string]models.Endpoint{}
+	for _, e := range eps {
+		byKey[e.URL+" "+e.Method] = e
+	}
+
+	// Old TD #1 expectation no longer holds: TD #2 intentionally
+	// introduces POST endpoints from forms declaring method="post".
+	sawNonGET := false
 	for _, e := range eps {
 		if e.Method != "GET" {
-			t.Fatalf("endpoint %q has Method=%q; TD #1 must not emit non-GET", e.URL, e.Method)
+			sawNonGET = true
 		}
 	}
-	// Sanity: at least one parameter name should have been discovered.
-	if len(names) == 0 {
-		t.Fatal("expected at least one parameter name from the form input")
+	if !sawNonGET {
+		t.Fatalf("expected at least one non-GET endpoint from the method=\"post\" form - TD #2 changes the old TD #1 GET-only boundary; got endpoints: %+v", eps)
+	}
+
+	// The method="get" form resolves to a GET endpoint at its action URL.
+	searchKey := canonicalOrOriginal(srv.URL+"/search") + " GET"
+	getEP, ok := byKey[searchKey]
+	if !ok {
+		t.Fatalf("expected a GET endpoint at key %q from the method=\"get\" form, got endpoints: %+v", searchKey, eps)
+	}
+	if len(getEP.Parameters) != 1 || getEP.Parameters[0] != "q" {
+		t.Fatalf("expected the method=\"get\" form's endpoint to carry Parameters=[\"q\"], got %+v", getEP.Parameters)
+	}
+	if len(getEP.FormParameters) != 0 {
+		t.Fatalf("expected the method=\"get\" form's endpoint to carry no FormParameters, got %+v", getEP.FormParameters)
+	}
+
+	// The method="post" form resolves to a POST endpoint at its action
+	// URL, carrying the field in FormParameters - never in Parameters.
+	submitKey := canonicalOrOriginal(srv.URL+"/submit") + " POST"
+	postEP, ok := byKey[submitKey]
+	if !ok {
+		t.Fatalf("expected a POST endpoint at key %q from the method=\"post\" form, got endpoints: %+v", submitKey, eps)
+	}
+	if len(postEP.FormParameters) != 1 || postEP.FormParameters[0] != "x" {
+		t.Fatalf("expected the method=\"post\" form's endpoint to carry FormParameters=[\"x\"], got %+v", postEP.FormParameters)
+	}
+	if len(postEP.Parameters) != 0 {
+		t.Fatalf("expected the method=\"post\" form's endpoint to carry no query Parameters, got %+v", postEP.Parameters)
+	}
+
+	// The page's own GET endpoint remains present and GET - TD #2 only
+	// ever adds new (form-derived) endpoints, it never changes an
+	// existing GET endpoint's method.
+	rootKey := canonicalOrOriginal(srv.URL+"/") + " GET"
+	if _, ok := byKey[rootKey]; !ok {
+		t.Fatalf("expected the root page's own GET endpoint at key %q to remain present, got endpoints: %+v", rootKey, eps)
 	}
 }
 
-// TestCrawl_FormActionIsLinkNotParameter confirms that action is treated
-// as a link (its URL becomes a queued page), not as a form submission -
-// i.e., the input's name is a parameter, and the form's action URL is
-// followed as a GET endpoint.
+// TestCrawl_FormActionIsLinkNotParameter confirms that a form's action is
+// still treated as a link (its URL becomes a queued page) on top of - not
+// instead of - being followed as a form-derived GET endpoint: the input's
+// name is a parameter on both the root page (page-level aggregation,
+// unchanged since before TD #2) and, via TD #2, on the /submit GET
+// endpoint the method="get" form itself produces. This test predates
+// TD #2 and originally asserted only the "action is a link" half; its
+// assertions still hold unchanged post-TD #2 (both endpoints legitimately
+// carry the "q" parameter), so no assertion here needed to change.
 func TestCrawl_FormActionIsLinkNotParameter(t *testing.T) {
 	var submitVisited bool
 	mux := http.NewServeMux()
