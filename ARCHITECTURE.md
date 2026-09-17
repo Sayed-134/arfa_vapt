@@ -738,7 +738,9 @@ Implementation is intentionally phased.
 
 ## Phase 1 — Verification Data Flow — CLOSED
 
-**Current phase.**
+For the authoritative current phase status and Technical Debt state,
+see ARFA_MASTER_CONTEXT.md. This section describes the architectural
+progression, not the live implementation status.
 
 Focus:
 
