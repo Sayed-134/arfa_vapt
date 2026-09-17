@@ -9,7 +9,7 @@ Target → Scope → Scan Job → Preflight → Discovery → Crawling → Endpo
 ## 2. Repository and baseline
 GitHub: Sayed-134/arfa_vapt
 Local project: `~/arfa_milestone_test/arfa_v2_test`
-Main: `94cf2fa — docs: calibrate risk scoring with verification rationale`
+Main: `36d7c86 — Merge pull request #8: feat: add form discovery and POST support`
 Expected state: `main == origin/main`, working tree clean.
 Milestone 1 branch retained: `feature/milestone-1-foundation-contract-regression`
 
@@ -92,21 +92,25 @@ Validation:
 E2E validated reachable localhost target, SQLi/XSS/LFI, CONFIRMED verification, Python 3 input/3 unique, posture 40.0.
 
 ## 8. Remaining technical debt
-1. Crawler GET-only discovery — POST/form support pending (TD #2). HTML parsing is now HTML5-based (TD #1 CLOSED).
-2. URL canonicalization needs strengthening.
-3. Endpoint ordering should be deterministic.
-4. Fallback parameters can increase noise.
-5. Payload corpus needs structured metadata/versioning.
-6. Deep scans can materialize too many jobs in memory. — CLOSED
-7. Rate limiter should become a true global/cancellable policy.
-8. Probe evidence should preserve complete relevant request/response context.
-9. XSS CONFIRMED currently means reproducible reflection/control evidence, not proof of JavaScript execution. — CLOSED
-10. IDOR remains heuristic until authenticated principal/session context exists.
-11. History storage needs stronger persistence/locking/retention design.
-12. Attack-chain detection is currently rule/co-occurrence based.
-13. Risk scoring needs documented calibration using verification/context. — CLOSED
-14. LLM input/output needs redaction, allowlisting, auditing, schema validation, and prompt-injection defenses.
-15. Payload corpus reproducibility/versioning needs improvement.
+Completed and frozen in Phase 4:
+- TD #1 — Crawler HTML parsing robustness
+- TD #2 — Forms / POST discovery
+- TD #3 — URL canonicalization
+- TD #7 — Bounded Scan Duration
+- TD #10 — XSS CONFIRMED Semantics
+- TD #14 — Risk Scoring Calibration
+
+Remaining open:
+- TD #4 — Deterministic endpoint ordering
+- TD #5 — Fallback parameter noise
+- TD #6 — Payload corpus structured metadata/versioning
+- TD #8 — Global/cancellable rate limiter policy
+- TD #9 — Complete relevant probe request/response evidence
+- TD #11 — IDOR authenticated principal/session context
+- TD #12 — History storage persistence/locking/retention
+- TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
+- TD #15 — LLM Input/Output Redaction
+- TD #16 — Payload corpus reproducibility/versioning
 
 ## 9. Core architecture rule
 Go is the source of truth for scanner facts, verification, evidence, and scan metadata.
@@ -245,9 +249,9 @@ Completed and frozen:
 - TD #14 — Risk Scoring Calibration
 - TD #3 — URL canonicalization
 - TD #1 — Crawler HTML parsing robustness
+- TD #2 — Forms / POST discovery
 
 Remaining open:
-- TD #2 — Forms / POST discovery
 - TD #4 — Deterministic endpoint ordering
 - TD #5 — Fallback parameter noise
 - TD #6 — Payload corpus structured metadata/versioning

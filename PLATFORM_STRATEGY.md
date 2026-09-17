@@ -581,8 +581,6 @@ The decision log lives in `PLATFORM_STRATEGY.md`, under this section. It is part
   - No new phase is opened
   - Implementation is deferred to a future phase
 
----
-
 **2026-09-16 — TD #2 Endpoint Identity & Form Parameter Transport**
 
 - **Decision:**
@@ -630,21 +628,43 @@ The decision log lives in `PLATFORM_STRATEGY.md`, under this section. It is part
   - **Minimal Scope + Professional Foundation** — accepted.
 
 - **Status:**
-  Accepted — implementation pending HTTP Client Audit and the resulting
-  Architecture/Implementation Decision.
+  Implemented and **CLOSED / FROZEN** on 2026-09-17 via PR #8.
+
+- **Implementation outcome:**
+  - HTML form discovery supports GET and POST.
+  - Form fields are extracted from `input`, `textarea`, and `select` elements.
+  - Endpoint identity is `(URL, Method)`.
+  - GET parameters use the query string.
+  - POST parameters use `application/x-www-form-urlencoded` request bodies.
+  - Scanner job generation, coverage seeding, and raw probing are method-aware.
+  - Existing GET behavior remains backward-compatible.
+  - No new dependency was introduced.
+
+- **Validation outcome:**
+  - Focused crawler/HTTP-client/scanner tests — PASS
+  - `go test ./...` — PASS
+  - `go test -race ./...` — PASS
+  - `go vet ./...` — PASS
+  - `go build ./...` — PASS
+  - `scripts/run_e2e_regression.sh` — PASS after updating the stale finding-count baseline from 3 to 4
+  - GitHub CI — 2/2 checks PASS
+  - PR #8 — MERGED to `main`
 
 - **Consequences:**
-  - Endpoint map identity changes from URL → `(URL, Method)`.
-  - `effectiveParams` becomes method-aware.
-  - `rawProbe` becomes method-aware.
-  - `httpclient.Do()` may require a backward-compatible extension; exact shape
-    will be decided after the HTTP Client Audit.
-  - No new dependency is expected.
-  - No completed Phase or TD is reopened.
+  - Endpoint map identity is now `(URL, Method)`.
+  - `effectiveParams` is method-aware.
+  - `rawProbe` is method-aware.
+  - `httpclient.Do()` accepts a method-aware request model.
+  - No completed Phase or TD was reopened.
 
 - **Future Capability Roadmap reference:**
   The "Out of Scope" items above are recorded in
   `PLATFORM_STRATEGY.md §10.5 — Extended HTTP capabilities`.
+
+TD #2 is now closed/frozen. Future work on multipart, JSON bodies, additional HTTP methods,
+cookies/session context, CSRF, GraphQL, or WebSocket remains outside TD #2 and must enter through
+the normal future-capability intake and phase process.
+
 
 ---
 
