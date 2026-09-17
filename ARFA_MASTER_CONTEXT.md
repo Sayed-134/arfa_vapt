@@ -112,6 +112,10 @@ Remaining open:
 - TD #15 — LLM Input/Output Redaction
 - TD #16 — Payload corpus reproducibility/versioning
 
+> Detailed implementation specifications for active Phase 4 TDs are
+> maintained in PHASE_4_TD_SPECS.md. Only the TD currently being
+> implemented needs to be read from that file.
+
 ## 9. Core architecture rule
 Go is the source of truth for scanner facts, verification, evidence, and scan metadata.
 
