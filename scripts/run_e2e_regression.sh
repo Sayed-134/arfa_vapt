@@ -62,8 +62,8 @@ assert go_result["scope"]["authorized"] is True
 assert go_result["reachability"]["status"] == "reachable"
 assert {f["category"] for f in go_result["findings"]} == {"SQLi", "XSS", "LFI"}
 assert all(f["verification_status"] == "CONFIRMED" for f in go_result["findings"])
-assert ai_result["metadata"]["input_findings_count"] == 3
-assert ai_result["metadata"]["deduplicated_count"] == 3
+assert ai_result["metadata"]["input_findings_count"] == 4
+assert ai_result["metadata"]["deduplicated_count"] == 4
 assert ai_result["source_scan"]["schema_version"] == "arfa.scan/v1"
 assert {f["category"] for f in ai_result["findings"]} == {"SQLi", "XSS", "LFI"}
 PY

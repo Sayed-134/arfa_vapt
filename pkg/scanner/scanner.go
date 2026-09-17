@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net/url"
 	"sort"
 	"sync"
 	"time"
@@ -197,8 +198,16 @@ func (s *Scanner) Scan(parentCtx context.Context, target string) (result models.
 	// cells that happened to produce a finding.
 	cov := coverage.New()
 	for _, ep := range endpoints {
+		// TD #2: a POST endpoint's mutable surface is its FormParameters,
+		// never the GET-oriented effectiveParams fallback list (q, id,
+		// search, page, url) - that fallback exists only for a GET
+		// endpoint whose crawler-discovered Parameters came back empty.
+		jobParams := effectiveParams(ep)
+		if ep.Method == "POST" {
+			jobParams = ep.FormParameters
+		}
 		for _, det := range s.reg.All() {
-			for _, param := range effectiveParams(ep) {
+			for _, param := range jobParams {
 				cov.Seed(coverage.Key{Endpoint: ep.URL, Parameter: param, Category: det.Category()})
 			}
 		}
@@ -281,7 +290,18 @@ func (s *Scanner) Scan(parentCtx context.Context, target string) (result models.
 				if ctx.Err() != nil {
 					return
 				}
-				param := j.ep.Parameters[0]
+				// TD #2: walkJobs puts the single job-scoped parameter into
+				// Parameters for a GET job and into FormParameters for a
+				// POST job (see walkJobs) - read from whichever one it
+				// actually populated. Order matters: a POST job's
+				// Parameters is nil, so Method must be checked before
+				// indexing either slice.
+				var param string
+				if j.ep.Method == "POST" {
+					param = j.ep.FormParameters[0]
+				} else {
+					param = j.ep.Parameters[0]
+				}
 				covKey := coverage.Key{Endpoint: j.ep.URL, Parameter: param, Category: j.detector.Category()}
 
 				pr := s.rawProbe(ctx, ctrl, j.ep, param, j.payload.Value, countReq)
@@ -417,7 +437,22 @@ func (s *Scanner) rawProbe(ctx context.Context, ctrl *adaptive.Controller, ep mo
 	ctrl.Acquire()
 	defer ctrl.Release()
 	_ = s.lim.Wait(ctx)
-	body, status, headers, duration, err := s.http.Do(ctx, ep.Method, ep.URL, map[string]string{param: value})
+
+	// TD #2: a POST endpoint sends the single selected parameter as an
+	// application/x-www-form-urlencoded body; every other method (GET
+	// endpoints, and the pre-existing IDOR/verification GET probes) keeps
+	// sending it as a URL query parameter - see httpclient.Request's doc
+	// comment. Exactly one key/value pair is ever sent per probe, same as
+	// before TD #2 - never the endpoint's full parameter/form-parameter
+	// set.
+	req := httpclient.Request{Method: ep.Method, URL: ep.URL}
+	if ep.Method == "POST" {
+		req.FormParams = url.Values{param: []string{value}}
+	} else {
+		req.QueryParams = url.Values{param: []string{value}}
+	}
+
+	body, status, headers, duration, err := s.http.Do(ctx, req)
 	s.lim.Feedback(status, err)
 	pr := models.ProbeResult{URL: ep.URL, Method: ep.Method, Status: status, Headers: headers, Body: body, DurationMS: duration.Milliseconds(), Err: err}
 	throttled := err != nil || status == 429 || status == 403
@@ -458,12 +493,31 @@ func (s *Scanner) selectPayloads(category string) []models.Payload {
 // would have run, in the same order the pre-Milestone-2 code produced.
 func walkJobs(endpoints []models.Endpoint, dets []detectors.Detector, selectPayloads func(string) []models.Payload, mode Mode, visit func(job) bool) {
 	for _, ep := range endpoints {
+		// TD #2: a POST endpoint's job-scheduling surface is its
+		// FormParameters; a GET endpoint's is effectiveParams(ep) - its
+		// own discovered Parameters, or the unchanged fallback guess list
+		// when empty (see effectiveParams; TD #5 owns that fallback, not
+		// this TD). The two are never mixed for one endpoint, since
+		// Endpoint identity is (URL, Method).
+		params := effectiveParams(ep)
+		if ep.Method == "POST" {
+			params = ep.FormParameters
+		}
 		for _, det := range dets {
 			for _, pl := range selectPayloads(det.Category()) {
-				for _, param := range effectiveParams(ep) {
+				for _, param := range params {
 					for _, enc := range encodings(det.Category(), mode) {
 						ep2 := ep
-						ep2.Parameters = []string{param}
+						if ep.Method == "POST" {
+							// Only the single mutated form field travels
+							// with the job - never the endpoint's other
+							// form fields, empty values, or placeholders
+							// (see rawProbe).
+							ep2.FormParameters = []string{param}
+							ep2.Parameters = nil
+						} else {
+							ep2.Parameters = []string{param}
+						}
 						p2 := pl
 						p2.Value = encode(pl.Value, enc)
 						if !visit(job{ep: ep2, detector: det, payload: p2, encoding: enc}) {

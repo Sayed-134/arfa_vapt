@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"arfa/pkg/detectors"
+	"arfa/pkg/httpclient"
 	"arfa/pkg/models"
 )
 
@@ -26,7 +27,7 @@ type slowFakeTransport struct {
 	calls  int32
 }
 
-func (f *slowFakeTransport) Do(ctx context.Context, method, rawURL string, params map[string]string) (string, int, http.Header, time.Duration, error) {
+func (f *slowFakeTransport) Do(ctx context.Context, r httpclient.Request) (string, int, http.Header, time.Duration, error) {
 	atomic.AddInt32(&f.active, 1)
 	atomic.AddInt32(&f.calls, 1)
 	time.Sleep(f.sleep)
