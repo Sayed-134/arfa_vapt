@@ -9,7 +9,7 @@ Target → Scope → Scan Job → Preflight → Discovery → Crawling → Endpo
 ## 2. Repository and baseline
 GitHub: Sayed-134/arfa_vapt
 Local project: `~/arfa_milestone_test/arfa_v2_test`
-Main: `36d7c86 — Merge pull request #8: feat: add form discovery and POST support`
+Main: `0c96e1d — feat: enforce deterministic endpoint ordering`
 Expected state: `main == origin/main`, working tree clean.
 Milestone 1 branch retained: `feature/milestone-1-foundation-contract-regression`
 
@@ -96,12 +96,12 @@ Completed and frozen in Phase 4:
 - TD #1 — Crawler HTML parsing robustness
 - TD #2 — Forms / POST discovery
 - TD #3 — URL canonicalization
+- TD #4 — Deterministic endpoint ordering
 - TD #7 — Bounded Scan Duration
 - TD #10 — XSS CONFIRMED Semantics
 - TD #14 — Risk Scoring Calibration
 
 Remaining open:
-- TD #4 — Deterministic endpoint ordering
 - TD #5 — Fallback parameter noise
 - TD #6 — Payload corpus structured metadata/versioning
 - TD #8 — Global/cancellable rate limiter policy
@@ -250,9 +250,9 @@ Completed and frozen:
 - TD #3 — URL canonicalization
 - TD #1 — Crawler HTML parsing robustness
 - TD #2 — Forms / POST discovery
+- TD #4 — Deterministic endpoint ordering
 
 Remaining open:
-- TD #4 — Deterministic endpoint ordering
 - TD #5 — Fallback parameter noise
 - TD #6 — Payload corpus structured metadata/versioning
 - TD #8 — Global/cancellable rate limiter policy
