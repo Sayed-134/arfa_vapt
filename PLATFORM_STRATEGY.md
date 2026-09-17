@@ -477,7 +477,11 @@ The bounded unit of work currently being executed. Has:
 - A merge point
 - A freeze point
 
-### 10.4 Current state (at the time of this document's creation)
+### 10.4 Historical state snapshot
+
+This section records the state at the time this strategy document was
+created. It is not current project status. For the authoritative current
+state, see ARFA_MASTER_CONTEXT.md.
 
 At the time of this document's creation:
 

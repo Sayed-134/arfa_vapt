@@ -9,7 +9,7 @@ Target → Scope → Scan Job → Preflight → Discovery → Crawling → Endpo
 ## 2. Repository and baseline
 GitHub: Sayed-134/arfa_vapt
 Local project: `~/arfa_milestone_test/arfa_v2_test`
-Main: `0c96e1d — feat: enforce deterministic endpoint ordering`
+Main branch: current `main` (always inspect git history for the current state)
 Expected state: `main == origin/main`, working tree clean.
 Milestone 1 branch retained: `feature/milestone-1-foundation-contract-regression`
 
