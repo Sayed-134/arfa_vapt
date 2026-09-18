@@ -17,6 +17,10 @@ var dirs = map[string][]string{
 func Load(root string) ([]models.Payload, error) {
 	var out []models.Payload
 	seen := map[string]bool{}
+	// TD #6: corpusName is the corpus root's own base directory name -
+	// deterministic, already available from the root argument, and not
+	// an inferred value.
+	corpusName := filepath.Base(filepath.Clean(root))
 	for cat, names := range dirs {
 		for _, name := range names {
 			d := filepath.Join(root, name)
@@ -46,7 +50,20 @@ func Load(root string) ([]models.Payload, error) {
 					id := hex.EncodeToString(h[:8])
 					if !seen[id] {
 						seen[id] = true
-						out = append(out, models.Payload{ID: id, Category: cat, Value: line, Source: path})
+						// TD #6: name (the corpus's own vulnerability-class
+						// directory, e.g. "XSS Injection") and ext (already
+						// computed above by the existing file-type filter)
+						// are both already-known, deterministic corpus
+						// structure - not inferred or heuristic.
+						out = append(out, models.Payload{
+							ID:             id,
+							Category:       cat,
+							Value:          line,
+							Source:         path,
+							CorpusName:     corpusName,
+							CorpusCategory: name,
+							FileType:       strings.TrimPrefix(ext, "."),
+						})
 					}
 				}
 				return nil
