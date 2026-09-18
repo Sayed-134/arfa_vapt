@@ -14,6 +14,32 @@ type Payload struct {
 	Category string `json:"category"`
 	Value    string `json:"value"`
 	Source   string `json:"source"`
+
+	// TD #6 — additive, optional structured metadata describing the
+	// payload's provenance within the loaded corpus. Populated only when
+	// the loader can determine it deterministically from the corpus's
+	// own directory/file layout - never inferred, never heuristic or
+	// AI-derived. Empty (and omitted from JSON) when not available, so
+	// existing consumers and the ID/Category/Value/Source contract are
+	// unaffected, and neither Payload.Value nor detector behavior is
+	// changed by any of these fields.
+
+	// CorpusName is the base name of the corpus root directory passed to
+	// Load (e.g. "PayloadsAllTheThings-master"). It identifies which
+	// corpus a payload came from - it is not the corpus-state
+	// fingerprint TD #16 will introduce.
+	CorpusName string `json:"corpus_name,omitempty"`
+
+	// CorpusCategory is the corpus's own vulnerability-class directory
+	// name (e.g. "XSS Injection"), as distinct from ARFA's internal,
+	// normalized Category (e.g. "XSS"). It preserves the corpus's own
+	// taxonomy alongside ARFA's mapping of it.
+	CorpusCategory string `json:"corpus_category,omitempty"`
+
+	// FileType is the source file's extension without the leading dot
+	// (e.g. "txt", "md"), as already determined by the loader's existing
+	// file-type filter.
+	FileType string `json:"file_type,omitempty"`
 }
 
 type ProbeResult struct {
