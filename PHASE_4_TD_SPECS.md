@@ -24,7 +24,8 @@
 
 ## TD #5 — Fallback Parameter Noise
 
-**Status:** Active — Phase 4
+**Status:** Closed / Frozen
+**Implementation:** commit d8329ce (merged via PR #15)
 
 ### Purpose
 
