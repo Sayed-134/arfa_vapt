@@ -187,6 +187,18 @@ func (s *Scanner) Scan(parentCtx context.Context, target string) (result models.
 		}
 		return result, crawlErr
 	}
+
+	// TD #5: strip known-noise parameters (tracking/cache-busting params
+	// such as utm_source) from what the crawler discovered, before they
+	// can turn into scan jobs, coverage cells or IDOR candidates. This is
+	// an explicit-list filter only - see filterNoiseParameters - and it
+	// never touches effectiveParams' separate GET fallback guess list
+	// (q, id, search, page, url), Endpoint identity, or job ordering.
+	for i := range endpoints {
+		endpoints[i].Parameters = filterNoiseParameters(endpoints[i].Parameters)
+		endpoints[i].FormParameters = filterNoiseParameters(endpoints[i].FormParameters)
+	}
+
 	result.Stats.Pages = pages
 	result.Stats.Endpoints = len(endpoints)
 	result.Stats.Parameters = countParams(endpoints)
