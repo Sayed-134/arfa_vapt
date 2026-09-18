@@ -144,18 +144,69 @@ TD #5 تتعامل فقط مع parameters التي يكتشفها الـcrawler 
 
 ## TD #6 — Payload corpus structured metadata/versioning
 
-**Purpose:** إضافة metadata منظمة للـpayload corpus.
+**Status:** Active — Phase 4
 
-**Required:** كل payload يبقى له metadata واضحة وقابلة للتتبع، مثل
-المصدر/الفئة/النوع والمعلومات اللازمة لفهمه واستخدامه.
+### Purpose
 
-**الهدف:** معرفة payload المستخدم ومصدره وتصنيفه بدون تغيير detector
-behavior.
+توسيع metadata المنظمة المرتبطة بكل payload بحيث تكون هوية وتصنيف
+ومصدر الـpayload المستخدم قابلة للتتبع بشكل واضح، مع الحفاظ على
+الـPayload contract الحالي.
 
-**Out of Scope:** تغيير payload database نفسه، إعادة تصميم detectors،
-أو إدخال AI في اختيار payloads.
+### Problem
 
-**Status:** Context only — full specification required before implementation.
+الـPayload الحالي يحتوي بالفعل على ID, Category, Value, وSource،
+لكن لا توجد metadata منظمة إضافية كافية لوصف خصائص أو provenance
+الـpayload عندما تكون هذه المعلومات متاحة من corpus structure.
+
+### Required Behavior
+
+1. الحفاظ على الحقول الحالية في models.Payload وعدم تغيير معناها.
+
+2. إضافة metadata فقط عندما تكون مدعومة بوضوح من الـpayload
+   corpus/loader.
+
+3. metadata يجب أن تكون deterministic وقابلة للتتبع.
+
+4. يجب أن تظل metadata مرتبطة بالـpayload المستخدم فعليًا.
+
+5. لا يتم استنتاج metadata باستخدام heuristic أو AI.
+
+6. عدم تغيير Payload.Value أو detector behavior بسبب metadata.
+
+7. أي metadata غير متاحة بشكل موثوق تظل optional بدل اختراع قيمة.
+
+### Pipeline Location
+
+داخل مسار تحميل الـpayload في pkg/payloads/، مع تعديل الـPayload
+representation فقط بالقدر الضروري لتمرير metadata المطلوبة، دون
+إعادة تصميم detector/execution pipeline.
+
+### Out of Scope
+
+- تغيير محتوى payloads-database/.
+- إعادة تصميم loader بالكامل.
+- تغيير semantics أو قيمة الـpayload.
+- AI/LLM للتصنيف.
+- فرض استخراج Section أو Type إذا لم تكن قابلة للاستخراج بشكل موثوق.
+- TD #16 corpus-level identity.
+
+### Required Tests
+
+- metadata صحيحة للـpayloadات التي تتوفر لها.
+- الحفاظ على ID/Category/Value/Source.
+- metadata deterministic.
+- غياب metadata الاختيارية لا يكسر loading/execution.
+- عدم تغيير detector behavior.
+- regression tests للـpayload loading.
+
+### Acceptance Criteria
+
+يمكن تتبع الـpayload المستخدم وmetadata الخاصة به دون تغيير سلوك
+scanner/detectors أو كسر الـPayload contract الحالي.
+
+### Design Principle
+
+> Metadata describes the payload; it does not change the payload.
 
 ---
 
@@ -265,19 +316,74 @@ Go evidence contracts.
 
 ## TD #16 — Payload corpus reproducibility/versioning
 
-**Purpose:** ضمان إمكانية معرفة وإعادة إنتاج الـpayload corpus
-المستخدم في scan.
+**Status:** Active — Phase 4
 
-**Required:** تسجيل version/identity/source أو fingerprint مناسب
-للـcorpus بحيث يمكن تحديد exact corpus state المستخدم.
+### Purpose
 
-**الهدف:** نفس الـscan يمكن تفسيره وإعادة إنتاجه من ناحية payload
-source/version.
+تحديد exact corpus state المستخدم في كل scan بحيث يمكن تتبع النتائج
+وإعادة تفسيرها/reproduce من ناحية payload corpus.
 
-**Out of Scope:** بناء payload database جديد أو تغيير محتوى
-الـcorpus نفسه.
+### Problem
 
-**Status:** Context only — full specification required before implementation.
+Payload.ID يحدد payload منفردًا، لكنه لا يحدد حالة الـcorpus كاملة
+التي تم تحميلها واستخدامها أثناء الـscan.
+
+### Required Behavior
+
+1. إنشاء deterministic corpus identity/fingerprint يمثل exact corpus
+   state المستخدم.
+
+2. الـidentity يجب أن تعتمد على corpus state الفعلي، وليس على payload
+   واحد.
+
+3. نفس corpus state يجب أن ينتج نفس identity.
+
+4. تغيير corpus state يجب أن ينتج identity مختلفة.
+
+5. يجب ربط corpus identity بالـscan الذي استخدمه.
+
+6. يجب أن تكون الـidentity قابلة للتسجيل والتتبع ضمن scan
+   result/evidence context المناسب.
+
+7. لا يتم تغيير محتوى الـcorpus كجزء من TD #16.
+
+8. آلية إنشاء الـfingerprint يجب أن تكون deterministic وقابلة للاختبار.
+
+### Pipeline Location
+
+عند تحميل/تجهيز الـpayload corpus في pkg/payloads/، ثم تمرير corpus
+identity إلى scan context/result بالحد الأدنى اللازم للتتبع.
+
+### Out of Scope
+
+- إنشاء payload database جديد.
+- تعديل محتوى payloads-database/.
+- إعادة تصميم payload selection.
+- تغيير detector behavior.
+- TD #6 payload-level metadata.
+- Knowledge Base/Zetsu.
+- إعادة تصميم scan history.
+
+### Required Tests
+
+- نفس corpus state → نفس fingerprint.
+- تغيير corpus state → fingerprint مختلفة.
+- ترتيب traversal غير المؤثر لا يغير fingerprint إذا كانت identity
+  مبنية على corpus content.
+- identity مرتبطة بالـscan.
+- reproducibility test من corpus state معروف.
+- regression tests للـpayload loading/execution.
+
+### Acceptance Criteria
+
+كل scan يمكن تحديد الـexact corpus state الذي استخدمه، والـidentity
+deterministic وقابلة للتتبع، بدون تغيير payload content أو execution
+behavior.
+
+### Design Principle
+
+> TD #6 identifies payload metadata; TD #16 identifies the exact
+> corpus state used by the scan.
 
 ---
 
