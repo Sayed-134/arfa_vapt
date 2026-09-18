@@ -143,49 +143,150 @@ TD #5 تتعامل فقط مع parameters التي يكتشفها الـcrawler 
 
 ## TD #6 — Payload corpus structured metadata/versioning
 
-**Status:** To be specified before implementation.
+**Purpose:** إضافة metadata منظمة للـpayload corpus.
+
+**Required:** كل payload يبقى له metadata واضحة وقابلة للتتبع، مثل
+المصدر/الفئة/النوع والمعلومات اللازمة لفهمه واستخدامه.
+
+**الهدف:** معرفة payload المستخدم ومصدره وتصنيفه بدون تغيير detector
+behavior.
+
+**Out of Scope:** تغيير payload database نفسه، إعادة تصميم detectors،
+أو إدخال AI في اختيار payloads.
+
+**Status:** Context only — full specification required before implementation.
 
 ---
 
 ## TD #8 — Global/cancellable rate limiter policy
 
-**Status:** To be specified before implementation.
+**Purpose:** توحيد سياسة الـrate limiting على مستوى الـscan بدل ما تكون
+موزعة بشكل يسبب تجاوزات أو سلوك غير متوقع.
+
+**Required:** limiter واحد/سياسة واضحة، قابلة للإلغاء مع الـscan
+cancellation، deterministic وthread-safe.
+
+**الهدف:** الـrate limit يكون فعليًا global على الـscan ويحترم
+cancellation.
+
+**Out of Scope:** تغيير adaptive concurrency أو إعادة تصميم scheduler،
+إلا بالقدر الضروري لتطبيق السياسة.
+
+**Status:** Context only — full specification required before implementation.
 
 ---
 
 ## TD #9 — Complete relevant probe request/response evidence
 
-**Status:** To be specified before implementation.
+**Purpose:** جعل evidence المرتبط بالـprobe كامل بما يكفي لإعادة
+فهم/مراجعة finding.
+
+**Required:** حفظ relevant request/response information المرتبط
+بالـprobe، مع redaction وحدود واضحة للحجم والحساسية.
+
+**الهدف:** finding يبقى قابلًا للمراجعة وإعادة التحقق بدون تخزين raw
+sensitive bodies بلا حدود.
+
+**Out of Scope:** تخزين كل traffic، Traffic Ingestion، OOB، أو تغيير
+Verification architecture.
+
+**Status:** Context only — full specification required before implementation.
 
 ---
 
 ## TD #11 — IDOR authenticated principal/session context
 
-**Status:** To be specified before implementation.
+**Purpose:** تحسين IDOR verification بحيث يكون عندنا context واضح
+للـauthenticated principal/session.
+
+**Required:** دعم principal/session context اللازم للمقارنة والتحقق
+من IDOR، مع الحفاظ على authorization boundaries.
+
+**الهدف:** عدم اعتبار اختلاف response وحده دليلًا كافيًا على IDOR.
+
+**Out of Scope:** نظام authentication كامل، session management عام،
+CSRF، أو إعادة تصميم HTTP layer.
+
+**Status:** Context only — full specification required before implementation.
 
 ---
 
 ## TD #12 — History storage persistence/locking/retention
 
-**Status:** To be specified before implementation.
+**Purpose:** جعل scan history persistent وآمن في حالات التشغيل
+المتكرر/المتوازي.
+
+**Required:** persistence واضحة + locking/concurrency safety +
+retention policy محددة.
+
+**الهدف:** منع corruption/races وضمان predictable history behavior.
+
+**Out of Scope:** Knowledge Base/Zetsu، distributed database، أو إعادة
+تصميم history كمنظومة مستقبلية كاملة.
+
+**Status:** Context only — full specification required before implementation.
 
 ---
 
 ## TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 
-**Status:** To be specified before implementation.
+**Purpose:** تطوير correlation في Python من مجرد co-occurrence/rules
+إلى attack-chain reasoning أكثر ارتباطًا بالأدلة.
+
+**Required:** ربط findings/endpoints/relationships بطريقة
+evidence-backed، مع provenance واضح وعدم اختراع facts.
+
+**الهدف:** اكتشاف chains حقيقية من العلاقات الموجودة في scan data
+بدل مجرد وجود vulnerabilities معًا.
+
+**Out of Scope:** autonomous exploitation، agentic execution loop، أو
+LLM يستبدل deterministic scanner facts.
+
+**Status:** Context only — full specification required before implementation.
 
 ---
 
 ## TD #15 — LLM Input/Output Redaction
 
-**Status:** To be specified before implementation.
+**Purpose:** منع تسريب secrets/sensitive data إلى الـLLM.
+
+**Required:** redaction قبل إرسال البيانات للـLLM، ومعالجة output
+أيضًا، بشكل deterministic قدر الإمكان وقابل للاختبار.
+
+**الهدف:** الـLLM يشتغل على أقل قدر لازم من البيانات الحساسة.
+
+**Out of Scope:** encryption system كامل، secrets manager، أو تغيير
+Go evidence contracts.
+
+**Status:** Context only — full specification required before implementation.
 
 ---
 
 ## TD #16 — Payload corpus reproducibility/versioning
 
-**Status:** To be specified before implementation.
+**Purpose:** ضمان إمكانية معرفة وإعادة إنتاج الـpayload corpus
+المستخدم في scan.
+
+**Required:** تسجيل version/identity/source أو fingerprint مناسب
+للـcorpus بحيث يمكن تحديد exact corpus state المستخدم.
+
+**الهدف:** نفس الـscan يمكن تفسيره وإعادة إنتاجه من ناحية payload
+source/version.
+
+**Out of Scope:** بناء payload database جديد أو تغيير محتوى
+الـcorpus نفسه.
+
+**Status:** Context only — full specification required before implementation.
+
+---
+
+> **Note on TD #6 vs TD #16:**
+> - **TD #6** = metadata داخل/حول الـpayload نفسه: ما هو هذا الـpayload؟
+>   تصنيفه ومصدره وخصائصه.
+> - **TD #16** = reproducibility للـcorpus كله: أي نسخة من corpus كانت
+>   مستخدمة في هذا الـscan؟
+>
+> ده التقسيم اللي يمنع التداخل بينهم.
 
 ---
 
