@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/url"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -21,6 +22,7 @@ import (
 	"arfa/pkg/planner"
 	"arfa/pkg/preflight"
 	"arfa/pkg/ratelimiter"
+	"arfa/pkg/redact"
 	"arfa/pkg/verification"
 )
 
@@ -387,7 +389,7 @@ func (s *Scanner) Scan(parentCtx context.Context, target string) (result models.
 					}
 
 					f.ID = fingerprint(f)
-					f.EvidenceDetail = buildEvidence(j.detector.Category(), j.ep, param, pr, vres)
+					f.EvidenceDetail = buildEvidence(j.detector.Category(), j.ep, param, j.payload.Value, pr, vres)
 					cov.Mark(covKey, coverage.FromVerificationStatus(f.VerificationStatus))
 					mu.Lock()
 					findings = append(findings, f)
@@ -604,26 +606,70 @@ func streamJobs(ctx context.Context, jobsCh chan job, endpoints []models.Endpoin
 	})
 }
 
+// arfaUserAgent and arfaAcceptHeader mirror the fixed header values
+// httpclient.Client always sends (see httpclient.New and
+// httpclient.Client.Do) - kept here, in one place, only for
+// reconstructRequestHeaders. If httpclient's own header-setting logic ever
+// changes, these must be updated to match.
+const (
+	arfaUserAgent    = "Arfa-VAPT/1.0"
+	arfaAcceptHeader = "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8"
+)
+
+// reconstructRequestHeaders returns a deterministic reconstruction of the
+// HTTP headers Arfa's httpclient.Client is known to always set for a probe
+// of the given method/form-body shape (see httpclient.Client.Do). It is
+// NOT a captured wire transcript: pkg/httpclient (protected - see
+// ARCHITECTURE.md §25) does not return the request headers it actually
+// sent, and TD #9 does not open pkg/httpclient to add that. See
+// models.Evidence.RequestHeaders's doc comment.
+func reconstructRequestHeaders(method string, hasFormParams bool) map[string]string {
+	h := map[string]string{
+		"User-Agent": arfaUserAgent,
+		"Accept":     arfaAcceptHeader,
+	}
+	if strings.EqualFold(method, "POST") && hasFormParams {
+		h["Content-Type"] = "application/x-www-form-urlencoded"
+	}
+	return h
+}
+
 // buildEvidence assembles the structured, redaction-bounded evidence record
 // for a finding. See models.Evidence's doc comment for what is deliberately
-// excluded (raw headers, full response bodies) and why.
-func buildEvidence(category string, ep models.Endpoint, param string, pr models.ProbeResult, vres *verification.Result) *models.Evidence {
+// excluded (raw response bodies) and why. value is the exact probe value
+// rawProbe sent for param (see its own QueryParams/FormParams
+// construction) - buildEvidence mirrors that same method-aware split so
+// Evidence.RequestQueryParams/RequestFormParams record exactly what this
+// probe sent, never the endpoint's original query string or its other
+// parameters/form fields.
+func buildEvidence(category string, ep models.Endpoint, param, value string, pr models.ProbeResult, vres *verification.Result) *models.Evidence {
 	snippet := pr.Body
 	if len(snippet) > evidenceSnippetLimit {
 		snippet = snippet[:evidenceSnippetLimit]
 	}
 	sum := sha256.Sum256([]byte(pr.Body))
 	ev := &models.Evidence{
-		Timestamp:       time.Now().UTC().Format(time.RFC3339),
-		Endpoint:        ep.URL,
-		Parameter:       param,
-		Category:        category,
-		RequestMethod:   ep.Method,
-		RequestURL:      pr.URL,
-		ResponseStatus:  pr.Status,
-		ResponseSnippet: snippet,
-		ResponseHash:    hex.EncodeToString(sum[:]),
+		Timestamp:          time.Now().UTC().Format(time.RFC3339),
+		Endpoint:           ep.URL,
+		Parameter:          param,
+		Category:           category,
+		RequestMethod:      ep.Method,
+		RequestURL:         pr.URL,
+		ResponseStatus:     pr.Status,
+		ResponseSnippet:    snippet,
+		ResponseBodyLength: len(pr.Body),
+		ResponseHash:       hex.EncodeToString(sum[:]),
+		ResponseHeaders:    redact.Headers(pr.Headers),
 	}
+
+	hasFormParams := strings.EqualFold(ep.Method, "POST")
+	if hasFormParams {
+		ev.RequestFormParams = url.Values{param: []string{value}}
+	} else {
+		ev.RequestQueryParams = url.Values{param: []string{value}}
+	}
+	ev.RequestHeaders = redact.PlainHeaders(reconstructRequestHeaders(ep.Method, hasFormParams))
+
 	if vres != nil {
 		if vres.RepeatProbe != nil {
 			ev.VerificationTrace = append(ev.VerificationTrace, fmt.Sprintf("repeat probe: status %d, %d byte response", vres.RepeatProbe.Status, len(vres.RepeatProbe.Body)))
