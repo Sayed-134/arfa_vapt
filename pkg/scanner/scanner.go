@@ -88,6 +88,13 @@ type Scanner struct {
 	lim      *ratelimiter.Limiter
 	verifier Verifier
 	payloads map[string][]models.Payload
+
+	// corpusFingerprint is the TD #16 deterministic identity of the exact
+	// payload corpus state loaded via LoadPayloads (see
+	// pkg/payloads.Fingerprint). Empty until LoadPayloads succeeds (e.g.
+	// -preflight-only runs never populate it), matching
+	// models.ScanEnvelope.CorpusFingerprint's own omitempty contract.
+	corpusFingerprint string
 }
 
 func New(cfg Config, reg *detectors.Registry) *Scanner {
@@ -116,6 +123,10 @@ func (s *Scanner) LoadPayloads(root string) error {
 		return err
 	}
 	s.payloads = payloads.Group(p)
+	// TD #16: record the exact corpus state's fingerprint alongside the
+	// existing grouping - additive, does not affect payload selection or
+	// detector behavior.
+	s.corpusFingerprint = payloads.Fingerprint(p)
 	return nil
 }
 
@@ -130,6 +141,11 @@ func (s *Scanner) LoadPayloads(root string) error {
 func (s *Scanner) Scan(parentCtx context.Context, target string) (result models.ScanResult, err error) {
 	start := time.Now()
 	result = models.ScanResult{SchemaVersion: "arfa.scan/v1", Target: target, Scope: s.cfg.Scope, StartedAt: start.UTC().Format(time.RFC3339), Mode: string(s.cfg.Mode)}
+	// TD #16: link the corpus identity to this scan's result envelope.
+	// s.corpusFingerprint is empty when LoadPayloads was never called
+	// (e.g. -preflight-only), in which case CorpusFingerprint's omitempty
+	// tag keeps it out of the JSON output, same as before this TD.
+	result.CorpusFingerprint = s.corpusFingerprint
 
 	ctx := parentCtx
 	if s.cfg.MaxDuration > 0 {

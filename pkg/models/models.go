@@ -248,6 +248,15 @@ type ScanEnvelope struct {
 	// is unchanged unless this data actually exists.
 	Coverage    []CoverageEntry `json:"coverage,omitempty"`
 	NextActions []NextAction    `json:"next_actions,omitempty"`
+
+	// CorpusFingerprint is the TD #16 deterministic identity of the exact
+	// payload corpus state used by this scan (see pkg/payloads.Fingerprint).
+	// It is additive and omitted from JSON when empty - e.g. -preflight-only
+	// runs, or any scan invocation where LoadPayloads was never called -
+	// so the envelope shape for existing consumers is unchanged unless a
+	// corpus was actually loaded. It identifies the corpus state only; it
+	// does not change payload content, selection, or detector behavior.
+	CorpusFingerprint string `json:"corpus_fingerprint,omitempty"`
 }
 
 // ScanResult remains an alias for source compatibility with the v2 baseline.
