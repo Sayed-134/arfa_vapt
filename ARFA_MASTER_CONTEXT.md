@@ -103,9 +103,9 @@ Completed and frozen in Phase 4:
 - TD #10 — XSS CONFIRMED Semantics
 - TD #14 — Risk Scoring Calibration
 - TD #16 — Payload corpus reproducibility/versioning
+- TD #8 — Global/cancellable rate limiter policy
 
 Remaining open:
-- TD #8 — Global/cancellable rate limiter policy
 - TD #9 — Complete relevant probe request/response evidence
 - TD #11 — IDOR authenticated principal/session context
 - TD #12 — History storage persistence/locking/retention
@@ -258,9 +258,9 @@ Completed and frozen:
 - TD #5 — Fallback parameter noise
 - TD #6 — Payload corpus structured metadata/versioning
 - TD #16 — Payload corpus reproducibility/versioning
+- TD #8 — Global/cancellable rate limiter policy
 
 Remaining open:
-- TD #8 — Global/cancellable rate limiter policy
 - TD #9 — Complete relevant probe request/response evidence
 - TD #11 — IDOR authenticated principal/session context
 - TD #12 — History storage persistence/locking/retention
