@@ -102,6 +102,7 @@ Completed and frozen in Phase 4:
 - TD #7 — Bounded Scan Duration
 - TD #10 — XSS CONFIRMED Semantics
 - TD #14 — Risk Scoring Calibration
+- TD #16 — Payload corpus reproducibility/versioning
 
 Remaining open:
 - TD #8 — Global/cancellable rate limiter policy
@@ -110,7 +111,6 @@ Remaining open:
 - TD #12 — History storage persistence/locking/retention
 - TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 - TD #15 — LLM Input/Output Redaction
-- TD #16 — Payload corpus reproducibility/versioning
 
 > Detailed implementation specifications for active Phase 4 TDs are
 > maintained in PHASE_4_TD_SPECS.md. Only the TD currently being
@@ -257,6 +257,7 @@ Completed and frozen:
 - TD #4 — Deterministic endpoint ordering
 - TD #5 — Fallback parameter noise
 - TD #6 — Payload corpus structured metadata/versioning
+- TD #16 — Payload corpus reproducibility/versioning
 
 Remaining open:
 - TD #8 — Global/cancellable rate limiter policy
@@ -265,7 +266,6 @@ Remaining open:
 - TD #12 — History storage persistence/locking/retention
 - TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 - TD #15 — LLM Input/Output Redaction
-- TD #16 — Payload corpus reproducibility/versioning
 
 Current phase remains open until all required Phase 4 work is completed.
 

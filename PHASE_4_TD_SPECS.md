@@ -317,7 +317,8 @@ Go evidence contracts.
 
 ## TD #16 — Payload corpus reproducibility/versioning
 
-**Status:** Active — Phase 4
+**Status:** Closed / Frozen
+**Implementation:** commit 0b89a70 (merged via PR #20)
 
 ### Purpose
 
