@@ -464,7 +464,18 @@ type job struct {
 func (s *Scanner) rawProbe(ctx context.Context, ctrl *adaptive.Controller, ep models.Endpoint, param, value string, onDone func(models.ProbeResult)) models.ProbeResult {
 	ctrl.Acquire()
 	defer ctrl.Release()
-	_ = s.lim.Wait(ctx)
+
+	// TD #8: the rate limiter's own cancellation/deadline must abort this
+	// probe before any HTTP request is issued. s.lim.Wait's error
+	// (context.Canceled or context.DeadlineExceeded) is propagated here
+	// unchanged - never wrapped or reinterpreted - so callers see exactly
+	// what the limiter/context reported. No HTTP request is sent in this
+	// case, so onDone is deliberately not invoked and Stats.Requests is
+	// unaffected, consistent with Stats.Requests counting only probes
+	// that actually reached the network.
+	if err := s.lim.Wait(ctx); err != nil {
+		return models.ProbeResult{URL: ep.URL, Method: ep.Method, Err: err}
+	}
 
 	// TD #2: a POST endpoint sends the single selected parameter as an
 	// application/x-www-form-urlencoded body; every other method (GET
