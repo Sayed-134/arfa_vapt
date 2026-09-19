@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -75,6 +76,40 @@ func Load(root string) ([]models.Payload, error) {
 	}
 	return out, nil
 }
+
+// Fingerprint computes a deterministic identity for the exact corpus state
+// represented by ps (TD #16 — Payload corpus reproducibility/versioning).
+//
+// It is built from each payload's already-deterministic identity fields
+// (ID, Category, CorpusName, CorpusCategory, FileType) rather than from
+// Source: Source is the absolute filesystem path the corpus happened to be
+// checked out to on this machine, which is not part of the corpus's
+// *content* state and would make the fingerprint non-reproducible across
+// different checkouts/environments of the identical corpus - contrary to
+// TD #16's reproducibility purpose.
+//
+// Load()'s own traversal order is not guaranteed (see loader_test.go's
+// TestLoadCorpusMetadataDeterministicAcrossLoads), so every payload's
+// identity line is computed independently and the resulting lines are
+// sorted before hashing: two loads of the same corpus content therefore
+// always produce the same fingerprint, regardless of traversal order, and
+// any change to corpus content (a payload added, removed, or changed)
+// changes the fingerprint. Fingerprint does not read the filesystem itself
+// and does not alter ps or any Payload field.
+func Fingerprint(ps []models.Payload) string {
+	lines := make([]string, 0, len(ps))
+	for _, p := range ps {
+		lines = append(lines, p.ID+"|"+p.Category+"|"+p.CorpusName+"|"+p.CorpusCategory+"|"+p.FileType)
+	}
+	sort.Strings(lines)
+	h := sha256.New()
+	for _, l := range lines {
+		h.Write([]byte(l))
+		h.Write([]byte("\n"))
+	}
+	return hex.EncodeToString(h.Sum(nil))
+}
+
 func Group(in []models.Payload) map[string][]models.Payload {
 	m := map[string][]models.Payload{}
 	for _, p := range in {
