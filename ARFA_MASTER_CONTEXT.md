@@ -104,13 +104,14 @@ Completed and frozen in Phase 4:
 - TD #14 — Risk Scoring Calibration
 - TD #16 — Payload corpus reproducibility/versioning
 - TD #8 — Global/cancellable rate limiter policy
+- TD #9 — Complete relevant probe request/response evidence
 
 Remaining open:
-- TD #9 — Complete relevant probe request/response evidence
 - TD #11 — IDOR authenticated principal/session context
 - TD #12 — History storage persistence/locking/retention
 - TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 - TD #15 — LLM Input/Output Redaction
+- TD #17 — Method-aware parameter selection in detectors
 
 > Detailed implementation specifications for active Phase 4 TDs are
 > maintained in PHASE_4_TD_SPECS.md. Only the TD currently being
@@ -259,13 +260,14 @@ Completed and frozen:
 - TD #6 — Payload corpus structured metadata/versioning
 - TD #16 — Payload corpus reproducibility/versioning
 - TD #8 — Global/cancellable rate limiter policy
+- TD #9 — Complete relevant probe request/response evidence
 
 Remaining open:
-- TD #9 — Complete relevant probe request/response evidence
 - TD #11 — IDOR authenticated principal/session context
 - TD #12 — History storage persistence/locking/retention
 - TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 - TD #15 — LLM Input/Output Redaction
+- TD #17 — Method-aware parameter selection in detectors
 
 Current phase remains open until all required Phase 4 work is completed.
 

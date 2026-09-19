@@ -331,7 +331,8 @@ requests خاضعة لسياسة واحدة واضحة، thread-safe، قابل�
 
 ## TD #9 — Complete relevant probe request/response evidence
 
-**Status:** Ready for Implementation
+**Status:** Closed / Frozen
+**Implementation:** commit 0d1c57e (merged via PR #26)
 **Depends on:** TD #6, TD #16 (مغلقين)
 **Blocks:** TD #13
 **Shared:** redaction policy مع TD #15
@@ -977,6 +978,119 @@ behavior.
 
 > TD #6 identifies payload metadata; TD #16 identifies the exact
 > corpus state used by the scan.
+
+
+---
+
+## TD #17 — Method-aware parameter selection in detectors
+
+**Status:** Ready for Implementation
+**Depends on:** TD #2 (مغلق), TD #9 (مغلق)
+**Blocks:** لا شيء
+**Note:** `pkg/detectors` only. الـscanner سليم؛ الـbug في الـdetector layer.
+
+### Purpose
+
+جعل `pkg/detectors`'s `params(ep)` helper method-aware، بحيث تختار الـparameters
+الصحيحة حسب الـendpoint method، بدل ما تستخدم GET-oriented fallback list
+لأي POST endpoint.
+
+### Problem
+
+`params(ep)` في `pkg/detectors/detector.go` مش method-aware.
+
+1. الـscanner (TD #2) بيسجّل POST endpoints بـ`FormParameters`، ويصفّر
+   `ep.Parameters` عند بناء الـjob (في `walkJobs`).
+2. الـdetector بيستدعي `params(ep)` → `len(ep.Parameters) == 0` لـPOST →
+   بيرجع الـfallback list من 7 GET-oriented parameters.
+3. الـdetector بيلاقي finding (من الـprobe الحقيقي)، وبيعمل **7 findings**
+   بنفس الـprobe بس بـ`Parameter` labels وهمية.
+4. النتيجة: findings بـparameter identity خاطئة → evidence مضلّل،
+   coverage mislabeling.
+
+**ملاحظة مهمة:** الـscanner نفسه **سليم**. `walkJobs` بتبعت الـjob الصح
+(`ep2.Parameters = [param]` لـGET، `ep2.FormParameters = [param]` لـPOST)،
+والـrawProbe بيبعت الـparam الصح. الـbug في الـdetector helper بس.
+
+**الـfallback list موجودة أصلاً لسبب:** دعم GET endpoints اللي مفيهاش
+parameters مكتشفة (legacy behavior من قبل TD #2). المفروض تفضل للـGET بس.
+
+### Required Behavior
+
+1. **`params(ep)` method-aware** — تاخد `ep.Method` في الحسبان.
+
+2. **GET behavior محفوظ**
+   - `ep.Parameters` موجودة → استخدامها.
+   - `ep.Parameters` فاضية → الـfallback list الحالي.
+   - **TD #5's noise filter يفضل شغال على الـfallback list زي ما هو.**
+
+3. **POST behavior صحيح**
+   - `ep.FormParameters` موجودة → استخدامها.
+   - `ep.FormParameters` فاضية → **zero parameters** (مفيش fallback).
+
+4. **لا fallback cross-method** — POST ما تستخدمش GET fallback list،
+   والعكس.
+
+5. **Parameter identity دقيقة** — الـfinding `Parameter` يطابق الـparameter
+   اللي اختاره الـscanner وأرسله الـprobe.
+
+6. **لا تغيير في detector semantics الأخرى** — XSS/SQLi/LFI/... matching
+   logic، evidence checking، verification semantics، `inject()` helper —
+   كلهم زي ما هو.
+
+7. **لا تغيير في الـscanner** — `effectiveParams` و`walkJobs` مش
+   هيتلمسوا.
+
+8. **Shared `params(ep)` helper** — التعديل في الـhelper واحد، مفيش تكرار.
+
+### Pipeline Location
+
+- `pkg/detectors/detector.go` — `params(ep)` helper.
+- `pkg/detectors/detectors.go` — 9 call sites (زي ما هي).
+- Tests في `pkg/detectors/`.
+
+### Out of Scope
+
+- تغيير `pkg/scanner`.
+- تغيير detector matching logic.
+- تغيير verification.
+- تغيير `models.Endpoint`.
+- تغيير TD #5's fallback list نفسها.
+- تغيير TD #9's evidence.
+- AI/heuristics.
+- إعادة فتح أي TD مغلق.
+
+### Required Tests
+
+1. GET + Parameters موجودة → `params()` ترجعها.
+2. GET + Parameters فاضية → fallback list الحالي (7).
+3. POST + FormParameters موجودة → `params()` ترجعها.
+4. POST + FormParameters فاضية → 0 parameters.
+5. POST ما تستخدمش GET fallback.
+6. GET ما تستخدمش FormParameters.
+7. finding `Parameter` يطابق الـparameter المرسل فعلاً.
+8. POST job واحد → finding واحد بس.
+9. GET regression — كل TD #1-#5 behavior محفوظ.
+10. TD #5 noise filter لسه شغال على GET fallback.
+11. XSS/SQLi/LFI detectors behavior محفوظ للـGET.
+12. race/concurrency — مفيش مشاكل.
+13. `go test ./...` PASS (مع الأخذ في الحسبان إن `pkg/scanner/td9_evidence_test.go`'s POST test هيتحوّل لـ"exactly 1" — regression متوقع نتيجة إصلاح الـbug، ويتم تعديله في TD #17 مش في TD #9).
+
+### Acceptance Criteria
+
+- `params(ep)` method-aware.
+- POST ما تستخدمش GET fallback.
+- Findings للـPOST بـparameter identity صحيحة.
+- GET behavior محفوظ بالكامل (TD #1-#5).
+- مفيش تغيير في detector semantics خارج الـparameter selection.
+- `go test ./... -race -count=1` PASS.
+- `./scripts/run_e2e_regression.sh` PASS.
+- `pkg/scanner/td9_evidence_test.go`'s POST tests محدّثة لـ"exactly 1".
+
+### Design Principle
+
+> One parameter selection rule, method-aware: GET uses GET parameters,
+> POST uses POST parameters, and neither falls back to the other.
 
 ---
 
