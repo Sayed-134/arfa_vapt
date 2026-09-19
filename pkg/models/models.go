@@ -1,6 +1,9 @@
 package models
 
-import "net/http"
+import (
+	"net/http"
+	"net/url"
+)
 
 type Endpoint struct {
 	URL            string   `json:"url"`
@@ -122,14 +125,49 @@ type Evidence struct {
 	RequestMethod string `json:"request_method"`
 	RequestURL    string `json:"request_url"`
 
+	// TD #9 — additive request evidence. RequestQueryParams and
+	// RequestFormParams record exactly the single probe-injected
+	// parameter/value pair that pkg/scanner's rawProbe placed into the
+	// outbound httpclient.Request for this specific probe - never the
+	// endpoint's original query string, never any other parameter or
+	// form field the endpoint may have (TD #2's one-mutated-field-per-
+	// probe transport already guarantees only one is ever sent). The two
+	// are populated mutually exclusively, mirroring rawProbe's own
+	// method-aware transport choice: RequestQueryParams for GET (and any
+	// non-POST method), RequestFormParams for POST. Omitted (nil) when
+	// not applicable to this probe.
+	RequestQueryParams url.Values `json:"request_query_params,omitempty"`
+	RequestFormParams  url.Values `json:"request_form_params,omitempty"`
+
+	// RequestHeaders is a deterministic reconstruction of the headers
+	// Arfa's httpclient.Client is known to always set for a request of
+	// this shape (User-Agent, Accept, and - for a POST carrying form
+	// params - Content-Type), redacted through pkg/redact before being
+	// stored here. It is NOT a captured wire transcript: pkg/httpclient
+	// (a protected package - see ARCHITECTURE.md §25) does not return the
+	// request headers it actually sent, and TD #9 does not open
+	// pkg/httpclient to add that. See
+	// pkg/scanner.reconstructRequestHeaders for the reconstruction logic.
+	// Omitted (nil) when empty.
+	RequestHeaders map[string]string `json:"request_headers,omitempty"`
+
 	ResponseStatus int `json:"response_status"`
 	// ResponseSnippet is truncated to a bounded length (see
 	// pkg/scanner.evidenceSnippetLimit) — never the full response body.
 	ResponseSnippet string `json:"response_snippet"`
+	// ResponseBodyLength is the length, in bytes, of the full response
+	// body - preserved even when ResponseSnippet itself is truncated, so
+	// the true body size is never silently lost to the snippet bound.
+	// Distinct from len(ResponseSnippet). Omitted when zero.
+	ResponseBodyLength int `json:"response_body_length,omitempty"`
 	// ResponseHash is sha256 of the *full* response body, so two findings
 	// can be compared/correlated for identical evidence without storing
 	// the full body twice.
 	ResponseHash string `json:"response_hash"`
+	// ResponseHeaders is the probe's response HTTP headers, redacted
+	// through pkg/redact before being stored here (e.g. a Set-Cookie
+	// value is never stored raw). Omitted (nil) when empty.
+	ResponseHeaders map[string]string `json:"response_headers,omitempty"`
 
 	// VerificationTrace is a short, human-readable log of what the
 	// verification engine did to reach its status ("repeat probe:
