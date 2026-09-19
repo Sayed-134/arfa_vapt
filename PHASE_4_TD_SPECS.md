@@ -213,105 +213,695 @@ scanner/detectors أو كسر الـPayload contract الحالي.
 
 ## TD #8 — Global/cancellable rate limiter policy
 
-**Purpose:** توحيد سياسة الـrate limiting على مستوى الـscan بدل ما تكون
-موزعة بشكل يسبب تجاوزات أو سلوك غير متوقع.
+**Status:** Ready for Implementation
+**Depends on:** TD #7 (مغلق)
+**Blocks:** لا شيء
 
-**Required:** limiter واحد/سياسة واضحة، قابلة للإلغاء مع الـscan
-cancellation، deterministic وthread-safe.
+### Purpose
 
-**الهدف:** الـrate limit يكون فعليًا global على الـscan ويحترم
-cancellation.
+توحيد سياسة الـrate limiting على مستوى الـscan بحيث تكون كل الـprobe
+requests خاضعة لسياسة واحدة واضحة، thread-safe، قابلة للإلغاء،
+وقابلة للتتبع.
 
-**Out of Scope:** تغيير adaptive concurrency أو إعادة تصميم scheduler،
-إلا بالقدر الضروري لتطبيق السياسة.
+### Problem
 
-**Status:** Context only — full specification required before implementation.
+`pkg/ratelimiter/Limiter` موجود، و`Wait(ctx context.Context)` موجود
+بالفعل، والـscanner بيستدعيه من `rawProbe()`. لكن:
+
+1. الـerror الراجع من `Wait(ctx)` بيتجاهل في `rawProbe` → لما الـcontext
+   يتلغى، الـprobe بيكمل ويبعت HTTP request.
+2. `Wait()` الحالي مجرد delay مستقل لكل caller — مش global serialized
+   pacing حقيقي بين الـworkers.
+3. `Feedback()` بيغيّر الـinterval أثناء وجود waiters — الـsemantics
+   غير محددة.
+
+### Required Behavior
+
+1. **Single scan-wide limiter** — كل `Scanner` يستخدم limiter واحد
+   مشترك بين كل الـworkers. مفيش limiter لكل worker أو detector.
+
+2. **Global request pacing** — الـlimiter يحجز الإذن للـrequest على
+   مستوى الـscan. نفس الـinput → نفس الـpacing. مفيش تجاوز المعدل
+   بسبب workers متوازية.
+
+3. **Cancellation propagation** — كل `Wait(ctx)` يحترم `ctx`.
+   `rawProbe()` لازم يتحقق من الـerror الراجع من `Wait(ctx)` ويلغي
+   الـprobe قبل أي HTTP request. `context.Canceled` /
+   `context.DeadlineExceeded` بيت propagated لفوق بدون تحويل.
+
+4. **Feedback semantics محددة** — `Feedback()` يؤثر على الـwaits
+   الجديدة فقط. أي waiter بدأ بالفعل يحافظ على الـdelay المحسوب عند
+   بدايته. مفيش burst ناتج عن تغيير الـinterval.
+
+5. **Thread safety** — concurrent `Wait()` + `Feedback()` آمنين.
+   مفيش race تحت `-race`.
+
+6. **No leaks** — cancellation أثناء الـwait ما يسيّبش
+   timers/goroutines معلقة.
+
+7. **No signature change** — `Wait(ctx context.Context) error` يفضل
+   زي ما هو. `Feedback()` يفضل زي ما هو (بس الـsemantics موثقة).
+
+8. **لا تغيير في scanner accounting** — `Stats.Requests` زي ما هو.
+   coverage / verification semantics زي ما هي. job scheduling order
+   زي ما هو.
+
+### Implementation Note
+
+الـspec ما بيفرضش algorithm بعينه. لو التنفيذ اختار يحفظ الـinterval
+القديم للـwaits الجارية، لازم يثبت بالاختبار إن الـglobal pacing policy
+مش بتتجاوز.
+
+### Pipeline Location
+
+- `pkg/ratelimiter/limiter.go` — policy + feedback semantics.
+- `pkg/scanner/scanner.go` — `rawProbe()` يتأكد من `Wait(ctx)` error
+  قبل HTTP execution.
+
+### Out of Scope
+
+- إعادة تصميم adaptive concurrency.
+- إعادة تصميم worker scheduler.
+- تغيير `MaxJobs`, `MaxDuration`.
+- تغيير endpoint ordering.
+- تغيير detector/verification semantics.
+- distributed rate limiting.
+- per-domain scheduling.
+- AI/heuristic rate selection.
+- إعادة فتح أي TD مغلق.
+
+### Required Tests
+
+1. limiter واحد مشترك بين concurrent callers.
+2. global pacing ما يسمحش بتجاوز policy بسبب workers متوازية.
+3. cancellation أثناء `Wait()` → `context.Canceled`.
+4. deadline أثناء `Wait()` → `context.DeadlineExceeded`.
+5. `rawProbe()` ما يبعتش HTTP request بعد cancellation.
+6. concurrent `Wait()` + `Feedback()` بدون race.
+7. initial rate policy deterministic.
+8. `Feedback()` عند 429/transport error يطبق policy محددة على waits
+   الجديدة.
+9. waits بدأت بالفعل ما بتتأثرش بتغيير الـinterval.
+10. مفيش burst بعد `Feedback()` لأسوأ.
+11. مفيش goroutine/timer leaks.
+12. scanner-level test: initial/verification probes بيمروا من نفس
+    الـlimiter.
+13. `go test -race` على concurrent limiter usage.
+14. regression للـscanner الحالي.
+
+### Acceptance Criteria
+
+- كل probe request في scan واحد خاضع لنفس global limiter.
+- cancellation بتوقف limiter waits والطلبات اللاحقة.
+- `rawProbe()` بيحترم `Wait(ctx)` error.
+- مفيش races/leaks/bursts.
+- adaptive concurrency منفصل عن rate limiting.
+- verification/evidence/coverage semantics ما اتغيرتش.
+- backward-compatible configuration.
+- `go test ./...`, `go test -race ./...`, `go vet ./...`,
+  `go build ./...` PASS.
+
+### Design Principle
+
+> One scan, one global request policy, one cancellable limiter.
+> Feedback affects new waits only.
 
 ---
 
 ## TD #9 — Complete relevant probe request/response evidence
 
-**Purpose:** جعل evidence المرتبط بالـprobe كامل بما يكفي لإعادة
-فهم/مراجعة finding.
+**Status:** Ready for Implementation
+**Depends on:** TD #6, TD #16 (مغلقين)
+**Blocks:** TD #13
+**Shared:** redaction policy مع TD #15
 
-**Required:** حفظ relevant request/response information المرتبط
-بالـprobe، مع redaction وحدود واضحة للحجم والحساسية.
+### Purpose
 
-**الهدف:** finding يبقى قابلًا للمراجعة وإعادة التحقق بدون تخزين raw
-sensitive bodies بلا حدود.
+توسيع structured evidence بحيث يكون الـprobe المرتبط بالـfinding قابل
+للفهم والمراجعة وإعادة التحقق، مع redaction-safe fields وحدود واضحة
+للحجم والحساسية.
 
-**Out of Scope:** تخزين كل traffic، Traffic Ingestion، OOB، أو تغيير
-Verification architecture.
+### Problem
 
-**Status:** Context only — full specification required before implementation.
+`models.Evidence` الحالي فيه `RequestMethod`, `RequestURL`,
+`ResponseStatus`, `ResponseSnippet`, `ResponseHash`, `VerificationTrace`.
+مفيش `RequestHeaders` ولا `ResponseHeaders` — والـcomment الحالي صريح
+إنه deliberately مش بيحمل raw headers.
+
+المطلوب: إضافة **additive** header evidence **مع redaction قبل دخولها
+للـ`Evidence` contract** — مش نضيف raw ثم ننظف.
+
+### Required Behavior
+
+1. **Evidence finding-scoped** — evidence مرتبط بالـprobe اللي أدى
+   للـfinding أو بالـverification. مفيش traffic archive.
+
+2. **Request evidence (additive fields)** — method, canonical URL,
+   relevant query params, relevant form/body params (لو لزم),
+   sanitized request headers.
+
+3. **Response evidence (additive fields)** — status, sanitized
+   response headers, bounded body snippet, body length, full-body
+   hash.
+
+4. **Verification probes** — initial vs repeat vs control
+   distinguishable. verification trace منفصل عن raw evidence.
+
+5. **Redaction policy (shared مع TD #15)** — نفس shared redaction
+   utility. sensitive headers/fields: `Authorization`, `Cookie`,
+   `Set-Cookie`, `X-Api-Key`, `Proxy-Authorization`, bearer/basic
+   credentials، password-like fields. deterministic. headers بتتدخل
+   `models.Evidence` بعد الـredaction.
+
+6. **Bounded size** — explicit size limits للـrequest/response
+   evidence. truncation deterministic + معلنة.
+
+7. **No silent data loss** — لو حصل truncation → status/length/hash
+   يفضلوا متاحين.
+
+8. **No change to finding truth** — evidence مش بيغير
+   `VerificationStatus`. مش بيرفع/ينزل confidence. مش بيعيد تشغيل
+   detector.
+
+9. **Backward compatibility** — `Evidence` الحالي يفضل readable.
+   fields الجديدة additive/optional (omitempty). `arfa.scan/v1`
+   يفضل صالح.
+
+### Implementation Note
+
+كلمة *relevant* لازم implementation يحددها بشكل deterministic،
+والاختبارات تثبت القاعدة المستخدمة.
+
+### Pipeline Location
+
+- `pkg/models/` — additive evidence contract.
+- `pkg/scanner/` — assembling evidence من `ProbeResult` مع redaction
+  قبل الدخول.
+- Redaction utility: shared package (يستخدمها TD #9 وTD #15).
+
+### Out of Scope
+
+- full traffic recording.
+- proxy/MITM integration.
+- OOB evidence.
+- HAR capture.
+- تغيير verification architecture.
+- تغيير detector semantics.
+- تغيير finding status/confidence.
+- permanent evidence database.
+- LLM redaction policy الخاصة بـTD #15 (لكن نفس الـutility).
+- Knowledge Base/Zetsu.
+
+### Required Tests
+
+1. relevant request info محفوظة.
+2. relevant response info محفوظة.
+3. sensitive request headers redacted قبل التخزين.
+4. sensitive response headers redacted.
+5. body truncation deterministic.
+6. body length محفوظ.
+7. response hash للـfull body.
+8. initial/repeat/control probes distinguishable.
+9. large evidence bounded.
+10. legacy evidence valid.
+11. verification status/confidence unchanged.
+12. JSON serialization regression.
+13. concurrent evidence assembly آمن.
+14. نفس redaction policy زي TD #15 (shared utility test).
+
+### Acceptance Criteria
+
+- finding عنده evidence كافي لفهم الـprobe.
+- مفيش raw sensitive headers/values في الـevidence.
+- redaction + truncation deterministic.
+- verification semantics ما اتغيرتش.
+- evidence additive/backward-compatible.
+- مفيش traffic-capture subsystem جديد.
+- existing tests PASS.
+
+### Design Principle
+
+> Capture enough evidence to reproduce understanding, not enough
+> traffic to become a data store. Sanitize before storage, not after.
 
 ---
 
 ## TD #11 — IDOR authenticated principal/session context
 
-**Purpose:** تحسين IDOR verification بحيث يكون عندنا context واضح
-للـauthenticated principal/session.
+**Status:** Ready for Implementation
+**Depends on:** Phase 3 (مغلق)
+**Blocks:** لا شيء
 
-**Required:** دعم principal/session context اللازم للمقارنة والتحقق
-من IDOR، مع الحفاظ على authorization boundaries.
+### Purpose
 
-**الهدف:** عدم اعتبار اختلاف response وحده دليلًا كافيًا على IDOR.
+إعطاء IDOR verification context واضح يربط كل probe بالـauthenticated
+principal/session اللي نفذ الاختبار، بحيث اختلاف response وحده ما يبقاش
+كافي لاعتبار الحالة IDOR.
 
-**Out of Scope:** نظام authentication كامل، session management عام،
-CSRF، أو إعادة تصميم HTTP layer.
+### Problem
 
-**Status:** Context only — full specification required before implementation.
+- الـscanner بيعمل IDOR-related findings، لكن مفيش context عن: مين
+  الـprincipal؟ أي session/auth context؟ هل المقارنة بين نفس
+  الـprincipal؟ هل الاختلاف authorization ولا application behavior؟
+- مفيش CLI flag حالي لتوفير context زي ده.
+- الـspec ده يعرّف **Auth Context Contract** أولاً، ويسيب اختيار
+  الـCLI/config mechanism للـimplementation.
+
+### Required Behavior
+
+1. **Auth Context Contract** — الـcontract يمثل: principal identity
+   (label/reference — مش secret)، session/auth context identity (safe
+   reference — مش raw credentials)، ربط بين الـprobe والـcontext.
+   الـcontract additive على `pkg/models`. **الـCLI/config mechanism
+   مش مفروض في الـspec** — implementation يختار لاحقاً.
+
+2. **No credential persistence** — passwords/tokens/cookies/secrets
+   مش بتتدخل finding أو history raw. الـcontext بيستخدم
+   references/labels آمنة.
+
+3. **Same-principal comparison** — كل probe بيوضح الـprincipal
+   المستخدم. اختلاف response وحده مش دليل على cross-principal failure.
+
+4. **Cross-principal support** — architecture تسمح بمقارنة principal
+   A vs B لما يتوفرا صراحة. من غير context كافي → `INCONCLUSIVE` أو
+   `LIKELY`، مش `CONFIRMED`.
+
+5. **Authorization boundaries** — مفيش bypass للـauthorization gate.
+   مفيش اختراع credentials/sessions. الـcontext لازم ييجي من
+   operator/test setup صريح.
+
+6. **Evidence linkage** — finding/evidence بيحدد context identifier.
+   مش بيخزن السر.
+
+7. **Deterministic semantics** — نفس principal/context + نفس probe →
+   نفس context identity. context identity مش معتمدة على raw secret
+   text لو ممكن.
+
+8. **No auto account creation.**
+
+9. **No change to generic verification.**
+
+### Pipeline Location
+
+- IDOR-specific scanning/verification flow في `pkg/scanner`.
+- additive context model في `pkg/models`.
+- HTTP/session execution changes minimal ومحصورة في دعم الـcontext،
+  من غير إعادة تصميم `pkg/httpclient`.
+
+### Out of Scope
+
+- authentication framework.
+- session management system.
+- credential vault / secrets manager.
+- CSRF.
+- account provisioning.
+- OAuth/OIDC.
+- generic authorization engine.
+- إعادة تصميم HTTP client.
+- إعادة تصميم verification architecture.
+- autonomous privilege escalation.
+- تغيير semantics findings تانية.
+
+### Required Tests
+
+1. principal context موجود عند IDOR probe.
+2. session context identifier موجود بدون raw credentials.
+3. same principal → same context identity.
+4. different principals → distinguishable.
+5. raw auth token مش في serialized evidence.
+6. raw cookie مش في serialized evidence.
+7. IDOR comparison records principal per probe.
+8. insufficient context → no false `CONFIRMED`.
+9. cross-principal comparison بتفرق authorized vs unauthorized لما
+   contexts صريحة.
+10. non-IDOR findings unchanged.
+11. JSON compatibility.
+12. race tests على concurrent IDOR context.
+
+### Acceptance Criteria
+
+- IDOR findings مرتبطة بوضوح بـprincipal/session context.
+- مفيش auth secrets raw.
+- response difference وحده مش `CONFIRMED`.
+- cross-principal verification ممكن بس بـcontexts صريحة.
+- authorization boundaries محفوظة.
+- existing scanner/detector behavior unchanged خارج IDOR.
+- tests PASS.
+
+### Design Principle
+
+> An IDOR claim must identify who accessed what, under which
+> authorized session context, and what changed between principals.
+> The contract comes before the CLI.
 
 ---
 
 ## TD #12 — History storage persistence/locking/retention
 
-**Purpose:** جعل scan history persistent وآمن في حالات التشغيل
-المتكرر/المتوازي.
+**Status:** Ready for Implementation
+**Depends on:** لا شيء
+**Blocks:** لا شيء
+**Note:** يطوّر `pkg/db` الموجود، مش `pkg/history` جديد.
 
-**Required:** persistence واضحة + locking/concurrency safety +
-retention policy محددة.
+### Purpose
 
-**الهدف:** منع corruption/races وضمان predictable history behavior.
+تطوير `pkg/db` history store الحالي إلى storage آمن في حالات التشغيل
+المتكرر/المتوازي، مع atomic writes، locking، retention policy، وscan
+identity واضحة.
 
-**Out of Scope:** Knowledge Base/Zetsu، distributed database، أو إعادة
-تصميم history كمنظومة مستقبلية كاملة.
+### Problem
 
-**Status:** Context only — full specification required before implementation.
+- `pkg/db` موجود وبيسجل `scan_history.json` عن طريق `st.Save(r)`.
+- مفيش: atomic writes (ممكن partial/corrupt record لو العملية
+  اتقتلت)، locking/concurrency safety (scanين متوازيين ممكن
+  يتخانقوا)، retention policy (الملف بيكبر بلا حدود)، scan identity
+  واضحة (احتمال collision).
+- في نفس الوقت، **مش عايزين storage subsystem جديد** جانب `pkg/db`
+  القديم.
+
+### Required Behavior
+
+1. **Evolution لـ`pkg/db`** — نفس `scan_history.json` (أو امتداد
+   له). additive/compatible schema لو احتاج. مفيش migration لنظام
+   جديد.
+
+2. **Atomic writes** — الكتابة على temp file ثم rename. interruption
+   ما يسيّبش canonical record نصف مكتوب.
+
+3. **Concurrency safety** — concurrent scans ما يعملوش corruption.
+   locking/serialization mechanism واضحة. readers ما يقرأوش partial
+   records.
+
+4. **Stable scan identity** — كل record له scan identifier واضح.
+   مفيش overwrite بسبب filename collision.
+
+5. **Retention policy** — configurable. deterministic. بالعدد و/أو
+   العمر. مفيش unbounded growth.
+
+6. **Failure handling** — storage error observable. scan result
+   الأساسي ما يتغيرش بسبب history failure. مفيش silent success.
+
+7. **Sensitive data boundary** — history بتستخدم structured scan
+   result/evidence contracts. مفيش raw credentials/traffic. TD #9
+   وTD #15 boundaries محفوظة.
+
+8. **Local-first** — مفيش distributed dependency.
+
+9. **Backward compatibility** — scan execution شغال حتى لو history
+   معطلة/مش متاحة.
+
+### Pipeline Location
+
+- `pkg/db` — التطوير الأساسي.
+- Integration بعد اكتمال scan result، مش في probe path.
+
+### Out of Scope
+
+- Knowledge Base/Zetsu.
+- distributed database.
+- cloud storage.
+- multi-node locking.
+- search/indexing.
+- dashboard.
+- audit/event sourcing.
+- raw traffic archive.
+- تغيير scanner execution semantics.
+- تغيير finding/evidence contracts (إلا history ID الإضافي).
+
+### Required Tests
+
+1. single scan persists.
+2. persisted record reload.
+3. concurrent writers no corruption.
+4. concurrent readers no partial reads.
+5. atomic write failure ما يسيّبش corrupt canonical record.
+6. unique scan IDs.
+7. retention by count.
+8. retention by age (لو implemented).
+9. retention ما بتمسحش records أحدث.
+10. storage dir init deterministic.
+11. permission/write failure surfaced.
+12. history disabled/unavailable ما يفسدش scan result.
+13. `go test -race` concurrent read/write.
+14. regression للـscan/report output.
+
+### Acceptance Criteria
+
+- scan history persistent ومحلي.
+- concurrency مش بتعمل corruption/lost records.
+- writes atomic.
+- retention policy explicit + testable.
+- storage failures observable.
+- مفيش distributed dependency.
+- history مش raw traffic store.
+- existing scanner behavior intact.
+- `go test ./...`, `go test -race ./...`, `go vet ./...`,
+  `go build ./...` PASS.
+
+### Design Principle
+
+> Evolve the existing history store into a durable,
+> concurrency-safe contract — without creating a second storage
+> subsystem.
 
 ---
 
 ## TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 
-**Purpose:** تطوير correlation في Python من مجرد co-occurrence/rules
-إلى attack-chain reasoning أكثر ارتباطًا بالأدلة.
+**Status:** Ready for Implementation
+**Depends on:** TD #9 (evidence)
+**Blocks:** لا شيء
+**Note:** Python-only schema changes. `arfa.scan/v1` **مش** هيتغير.
 
-**Required:** ربط findings/endpoints/relationships بطريقة
-evidence-backed، مع provenance واضح وعدم اختراع facts.
+### Purpose
 
-**الهدف:** اكتشاف chains حقيقية من العلاقات الموجودة في scan data
-بدل مجرد وجود vulnerabilities معًا.
+تطوير attack-chain detection في Python AI Engine من co-occurrence
+rules إلى relationships مدعومة بالـevidence والـscan structure.
 
-**Out of Scope:** autonomous exploitation، agentic execution loop، أو
-LLM يستبدل deterministic scanner facts.
+### Problem
 
-**Status:** Context only — full specification required before implementation.
+- `detect_attack_chains()` الحالي بيعتمد على category co-occurrence.
+- `AttackChain` schema الحالي فيه: `title`, `description`,
+  `chain_type`, `related_finding_ids`, `potential_impact`.
+- مفيش `relationships` ولا `evidence_refs` — سنضيفهم additive في
+  Python schema بس.
+
+### Required Behavior
+
+1. **Evidence-backed relationships** — كل chain عنده relationships
+   قابلة للتفسير. كل relationship بيشير لـfinding IDs موجودة فعلاً.
+
+2. **Explicit chain stages** — ordered stages: initial weakness →
+   enabling condition → affected endpoint → impact.
+
+3. **No category-only chain** — category A + category B لوحدهم مش
+   كافيين.
+
+4. **Endpoint relationship support** — same endpoint, related paths,
+   shared parameter/object, shared evidence markers, principal/session
+   context.
+
+5. **Verification-aware** — `VerificationStatus` محفوظ.
+   unverified/inconclusive مش بتتعامل كfacts. chain output بيوضح
+   درجة evidence بدل ما يرفع لـ`CONFIRMED`.
+
+6. **Deterministic core** — relationship extraction deterministic.
+   same normalized findings → same chain output/order.
+
+7. **AI optional, not authoritative** — LLM (لو استُخدم)
+   للـnarrative/explanation فقط. مش بينشئ findings/facts. مش بيستبدل
+   deterministic correlation. narrative بيتخزن منفصل في الـreport
+   layer (مثلاً `attack_chain_narratives`)، مش داخل `AttackChain`.
+
+8. **Provenance** — كل chain بيحدد: finding IDs, relationship/reason,
+   source evidence, chain type.
+
+9. **No exploitation.**
+
+10. **Stable output** — ordering deterministic. dedup deterministic.
+
+11. **Python-only schema change** — `AttackChain` additive fields في
+    `ai-engine/schemas/common.py`. `arfa.scan/v1` مش بيتغير.
+
+### Pipeline Location
+
+- `ai-engine/correlation/endpoint_correlator.py` — relationship
+  extraction + chain assembly.
+- `ai-engine/schemas/common.py` — additive fields على `AttackChain`.
+- `ARFAEngine.process()` بيستدعي بعد normalization/dedup/risk.
+
+### Out of Scope
+
+- autonomous exploitation.
+- agentic execution loop.
+- تغيير Go scanner findings.
+- تغيير verification status.
+- LLM-based vulnerability detection.
+- arbitrary graph DB.
+- external threat intel.
+- automatic remediation.
+- تغيير risk scoring semantics.
+- `arfa.scan/v1` change.
+
+### Required Tests
+
+1. category co-occurrence alone → no chain.
+2. valid explicit relationship → chain.
+3. every chain references existing finding IDs.
+4. missing finding reference → no chain.
+5. verification status preserved.
+6. inconclusive findings مش بتتحول لـconfirmed facts.
+7. same input → same chains.
+8. duplicate relationships deduplicated.
+9. chain ordering deterministic.
+10. endpoint relationship test.
+11. parameter/object relationship test.
+12. evidence provenance preserved.
+13. empty findings → no chains.
+14. existing endpoint correlation unchanged.
+15. LLM unavailable → deterministic chain detection still works.
+16. LLM narrative (لو استُخدم) موجود منفصل عن `AttackChain`، ومش
+    بيغيّر أي fact.
+
+### Acceptance Criteria
+
+- chains مبنية على relationships/evidence، مش co-occurrence.
+- كل chain له provenance واضح.
+- مفيش invented facts.
+- verification semantics محفوظة.
+- output deterministic.
+- LLM مش required.
+- مفيش autonomous exploitation.
+- `arfa.scan/v1` unchanged.
+- existing Python tests + regression PASS.
+
+### Design Principle
+
+> A chain is a sequence of evidenced relationships, not a list of
+> vulnerabilities that happen to coexist. LLM narrative is optional
+> presentation, never a security fact.
 
 ---
 
 ## TD #15 — LLM Input/Output Redaction
 
-**Purpose:** منع تسريب secrets/sensitive data إلى الـLLM.
+**Status:** Ready for Implementation
+**Depends on:** TD #9 (shared redaction utility)
+**Blocks:** لا شيء
 
-**Required:** redaction قبل إرسال البيانات للـLLM، ومعالجة output
-أيضًا، بشكل deterministic قدر الإمكان وقابل للاختبار.
+### Purpose
 
-**الهدف:** الـLLM يشتغل على أقل قدر لازم من البيانات الحساسة.
+إنشاء redaction boundary واحدة حول الـLLM، بحيث secrets/sensitive
+data ما توصلش للـmodel input، وأي sensitive content من الـoutput ما
+يتسربش لـreports/downstream.
 
-**Out of Scope:** encryption system كامل، secrets manager، أو تغيير
-Go evidence contracts.
+### Problem
 
-**Status:** Context only — full specification required before implementation.
+- `LLMClient` في `ai-engine/llm/client.py` بيبعت prompt string مباشرة
+  عبر `requests.post(.../api/generate)`.
+- الـprompt ممكن يحتوي findings/evidence/URLs/tokens/cookies/
+  credentials.
+- `prompts.py` هو templates فقط، مش HTTP caller — فهو مش الـboundary.
+- الـoutput لازم يتحط في الـreport من غير تسريب.
+
+### Required Behavior
+
+1. **Single enforcement boundary** — كل prompt بيعدي على redaction
+   قبل `requests.post`. كل output بيعدي على redaction بعد الاستلام.
+   أي LLM call جديد مستقبلاً لازم يعدي من `LLMClient`.
+
+2. **Deterministic redaction** — patterns/rules صريحة. نفس input →
+   نفس output. مفيش ML/LLM لتحديد ما يُredact.
+
+3. **Sensitive categories** — `Authorization` headers/tokens.
+   `Cookie`/session values. API keys. bearer/basic credentials.
+   password-like fields. common secret/token patterns.
+
+4. **Shared redaction policy مع TD #9** — نفس الـutility/القائمة.
+   TD #9 = evidence safety. TD #15 = LLM boundary safety. الـTDs
+   مستقلين وظيفياً.
+
+5. **Preserve analytical utility** — مش بنحذف كل context. field
+   names, categories, endpoint structure, status, non-sensitive
+   evidence metadata تفضل متاحة. redaction minimal قدر الإمكان.
+
+6. **Output redaction** — الـoutput يعدي على نفس الـredaction قبل
+   التخزين/الـreport. secret-like content → `[REDACTED]`.
+
+7. **No scanner fact mutation** — الـLLM output مش بيغير:
+   `VerificationStatus`, `VerificationConfidence`, evidence, finding
+   identity, scanner facts.
+
+8. **Failure-safe** — لو redaction فشلت → مفيش إرسال raw data
+   (fail-closed). نفس المبدأ للـoutput.
+
+9. **Logging safety** — exceptions/logs ما تطبعش raw sensitive
+   prompt/response.
+
+10. **No secrets storage** — الـredaction layer مش secrets DB. مفيش
+    raw retention لأغراض "restore".
+
+11. **Endpoint agnostic** — local/remote LLM → نفس السياسة.
+
+12. **Health check مستثنى** — `is_available()` (e.g. `/api/tags`)
+    مش بيحمل user/security data → مش محتاج content-redaction pipeline.
+    الـrule: أي call بيحمل security/user content يعدي من الـredactor.
+
+### Pipeline Location
+
+- `ai-engine/llm/client.py` — enforcement boundary.
+- `prompts.py` — templates فقط.
+- shared redaction utility — يستخدمها `LLMClient` وTD #9.
+
+### Out of Scope
+
+- encryption system.
+- secrets manager / credential vault.
+- network transport security redesign.
+- replacing Ollama/LLM provider.
+- تغيير Go evidence contracts.
+- تغيير scanner findings.
+- LLM-based security detection.
+- prompt-injection research.
+- automatic secret rotation.
+
+### Required Tests
+
+1. `Authorization` header redacted.
+2. Bearer token redacted.
+3. Cookie/session value redacted.
+4. API-key-like values redacted.
+5. password-like fields redacted.
+6. secrets inside URLs/strings handled per rules.
+7. non-sensitive security context preserved.
+8. same input → same redacted output.
+9. output containing secret-like data redacted.
+10. raw prompt never reaches HTTP request after redaction failure.
+11. exceptions don't leak raw prompt/output.
+12. scanner verification fields cannot be changed by LLM output.
+13. empty/no-secret input remains usable.
+14. LLM unavailable → deterministic engine path still works.
+15. `is_available()` health check doesn't go through
+    content-redaction (ولا يحمل security data).
+16. regression للـreport generation.
+17. shared redaction utility tested independently + reused by TD #9.
+
+### Acceptance Criteria
+
+- مفيش raw sensitive scanner data بتوصل للـLLM.
+- input/output redaction deterministic + testable.
+- redaction failure → منع الإرسال (fail-closed).
+- output redaction بتمنع تسريب secret للـreport/downstream.
+- scanner facts مش قابلة للتغيير من LLM.
+- شغالة مع local وremote endpoints.
+- existing AI engine behavior functional لما مفيش sensitive data.
+- Python tests + regression PASS.
+
+### Design Principle
+
+> The LLM may interpret security data, but it never becomes the
+> trusted source of security facts or a path around the data-safety
+> boundary. One boundary, one policy, shared with evidence safety.
 
 ---
 
