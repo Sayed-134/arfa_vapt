@@ -144,7 +144,8 @@ TD #5 تتعامل فقط مع parameters التي يكتشفها الـcrawler 
 
 ## TD #6 — Payload corpus structured metadata/versioning
 
-**Status:** Active — Phase 4
+**Status:** Closed / Frozen
+**Implementation:** commit b70e7b2 (merged via PR #18)
 
 ### Purpose
 

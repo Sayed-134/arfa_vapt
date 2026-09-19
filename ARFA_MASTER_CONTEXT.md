@@ -98,12 +98,12 @@ Completed and frozen in Phase 4:
 - TD #3 — URL canonicalization
 - TD #4 — Deterministic endpoint ordering
 - TD #5 — Fallback parameter noise
+- TD #6 — Payload corpus structured metadata/versioning
 - TD #7 — Bounded Scan Duration
 - TD #10 — XSS CONFIRMED Semantics
 - TD #14 — Risk Scoring Calibration
 
 Remaining open:
-- TD #6 — Payload corpus structured metadata/versioning
 - TD #8 — Global/cancellable rate limiter policy
 - TD #9 — Complete relevant probe request/response evidence
 - TD #11 — IDOR authenticated principal/session context
@@ -256,9 +256,9 @@ Completed and frozen:
 - TD #2 — Forms / POST discovery
 - TD #4 — Deterministic endpoint ordering
 - TD #5 — Fallback parameter noise
+- TD #6 — Payload corpus structured metadata/versioning
 
 Remaining open:
-- TD #6 — Payload corpus structured metadata/versioning
 - TD #8 — Global/cancellable rate limiter policy
 - TD #9 — Complete relevant probe request/response evidence
 - TD #11 — IDOR authenticated principal/session context
