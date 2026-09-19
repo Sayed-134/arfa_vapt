@@ -213,7 +213,8 @@ scanner/detectors أو كسر الـPayload contract الحالي.
 
 ## TD #8 — Global/cancellable rate limiter policy
 
-**Status:** Ready for Implementation
+**Status:** Closed / Frozen
+**Implementation:** commit 2be0972 (merged via PR #23)
 **Depends on:** TD #7 (مغلق)
 **Blocks:** لا شيء
 
