@@ -984,7 +984,8 @@ behavior.
 
 ## TD #17 — Method-aware parameter selection in detectors
 
-**Status:** Ready for Implementation
+**Status:** Closed / Frozen
+**Implementation:** commit 79e6695 (merged via PR #28)
 **Depends on:** TD #2 (مغلق), TD #9 (مغلق)
 **Blocks:** لا شيء
 **Note:** `pkg/detectors` only. الـscanner سليم؛ الـbug في الـdetector layer.
