@@ -50,7 +50,26 @@ func NewRegistry(ds ...Detector) *Registry {
 	return r
 }
 func (r *Registry) All() []Detector { return r.items }
+
+// params returns the parameter names a detector should iterate for ep,
+// method-aware per TD #17 (PHASE_4_TD_SPECS.md):
+//
+//   - POST: ep.FormParameters when non-empty, otherwise zero parameters.
+//     A POST endpoint never falls back to the GET-oriented guess list
+//     below - that list only ever made sense for a GET endpoint whose
+//     crawler-discovered Parameters came back empty.
+//   - Any other method (GET and everything else, unchanged): ep.Parameters
+//     when non-empty, otherwise the existing fallback guess list.
+//
+// This is the fix for the bug TD #17 documents: before this change, a
+// POST endpoint (whose mutable surface is FormParameters, with
+// Parameters always empty per TD #2) fell through to the fallback list
+// below and produced one finding per fallback entry against the same
+// real probe, each carrying a mostly-fictitious Parameter label.
 func params(ep models.Endpoint) []string {
+	if ep.Method == "POST" {
+		return ep.FormParameters
+	}
 	if len(ep.Parameters) > 0 {
 		return ep.Parameters
 	}
