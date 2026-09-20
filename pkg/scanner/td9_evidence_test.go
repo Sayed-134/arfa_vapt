@@ -89,21 +89,12 @@ func TestScan_EvidenceRecordsFormParamForPOST(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// Note: pkg/detectors' own params() helper (unrelated to TD #9, not
-	// modified here) falls back to a fixed 7-entry guess list whenever
-	// ep.Parameters is empty - which it always is for a POST job (TD #2
-	// puts the mutated field in FormParameters instead). Each of those 7
-	// internal iterations re-checks the *same* cached probe result
-	// against a different assumed (and, for POST, mostly fictitious)
-	// Parameter label, so several Findings can result from one real POST
-	// probe. This is pre-existing detector behavior, not a TD #9
-	// regression - what TD #9 owns is that every one of those Findings'
-	// EvidenceDetail is still built from the job's one real, correct
-	// param/value (see buildEvidence's call site in scanner.go), so every
-	// resulting finding's evidence agrees. See the delivered report notes
-	// for this observation.
-	if len(result.Findings) == 0 {
-		t.Fatal("expected at least 1 finding")
+	// pkg/detectors' params() helper is method-aware as of TD #17: a POST
+	// endpoint iterates only its own FormParameters, never the GET-oriented
+	// fallback guess list, so this real POST probe now produces exactly
+	// one Finding - not one per fallback entry.
+	if len(result.Findings) != 1 {
+		t.Fatalf("expected exactly 1 finding, got %d", len(result.Findings))
 	}
 	for _, f := range result.Findings {
 		ev := f.EvidenceDetail
@@ -148,12 +139,10 @@ func TestScan_EvidenceRequestHeadersReconstructed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	// See the note in TestScan_EvidenceRecordsFormParamForPOST: a POST job
-	// can legitimately produce more than one Finding from pkg/detectors'
-	// own pre-existing (TD #9-unrelated) params() fallback; every one of
-	// them still carries the same, correctly-reconstructed EvidenceDetail.
-	if len(result.Findings) == 0 {
-		t.Fatal("expected at least 1 finding")
+	// See the note in TestScan_EvidenceRecordsFormParamForPOST: as of
+	// TD #17, a POST job produces exactly one Finding.
+	if len(result.Findings) != 1 {
+		t.Fatalf("expected exactly 1 finding, got %d", len(result.Findings))
 	}
 	ev := result.Findings[0].EvidenceDetail
 	if ev == nil {
