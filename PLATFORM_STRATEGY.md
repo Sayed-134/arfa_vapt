@@ -514,6 +514,50 @@ Order is determined by the intake process, not by this document.
 
 ---
 
+### Additional Future Capability Candidates
+
+The following capabilities are accepted as future roadmap candidates only.
+They are not part of the current Phase 4 implementation and do not reopen
+or modify any closed TD.
+
+- **Detector Coverage Expansion**
+  - Systematic expansion of vulnerability detection beyond the currently
+    implemented detector set.
+  - Candidate areas may include command injection, LDAP injection, NoSQL
+    injection, SSRF, SSTI, open redirect, WebSocket/GraphQL-specific
+    vulnerabilities, and other validated vulnerability classes.
+  - New detectors must preserve the existing deterministic Detection →
+    Verification → Evidence → Finding pipeline, verification semantics,
+    evidence/provenance requirements, coverage tracking, and Go
+    source-of-truth rules.
+  - Exact detector priorities and phase placement will be determined
+    after Phase 4 completion and capability-gap review.
+
+- **Managed / ARFA-Owned Payload Corpus**
+  - Future evaluation of an ARFA-managed, versioned payload corpus in
+    addition to the currently used external corpus.
+  - The goal is broader detector coverage, controlled maintenance,
+    provenance, reproducibility, and predictable release behavior.
+  - This does not replace the existing corpus or alter TD #6 / TD #16.
+  - Corpus ownership, synchronization, packaging, licensing, maintenance,
+    and release strategy must be evaluated before implementation.
+  - No new corpus implementation is part of the current phase.
+
+- **Modern Web / SPA Discovery**
+  - The existing Headless Browser Adapter boundary may be used in a
+    future phase for JavaScript execution, SPA route discovery, dynamic
+    API discovery, DOM observations, and browser-assisted verification.
+  - This supplements the deterministic crawler; it does not replace it.
+  - The capability must preserve authorization/scope, endpoint identity,
+    deterministic core behavior, verification semantics, and
+    evidence/provenance.
+  - Implementation remains deferred to a future phase.
+
+These candidates are intentionally not assigned fixed phase numbers yet.
+Phase ordering will be determined through the Future Capability Intake
+process after the current Phase 4 work is complete and the actual
+capability gaps are re-evaluated.
+
 ## 11. Baseline & KPIs
 
 ### 11.1 Principle
