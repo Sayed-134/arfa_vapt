@@ -108,6 +108,29 @@ type Finding struct {
 	// finding produced by code that does not populate it, and omitted from
 	// JSON entirely in that case so existing consumers see no change.
 	EvidenceDetail *Evidence `json:"evidence_detail,omitempty"`
+
+	// AuthContext is the additive, TD #11 (IDOR authenticated
+	// principal/session context) reference to the AuthPrincipal/session
+	// this finding's probe executed under, when the caller supplied one
+	// (see AuthContext, and pkg/detectors' context-aware IDOR functions).
+	// It contains only safe, non-secret references - never a raw
+	// credential, token, or cookie value (see AuthContext's doc
+	// comment). nil (and omitted from JSON) for any finding produced
+	// without an explicit AuthContext, which is every finding today
+	// except IDOR findings produced through the new context-aware IDOR
+	// entry points, so existing consumers see no change.
+	AuthContext *AuthContext `json:"auth_context,omitempty"`
+
+	// IDORComparison is the additive, TD #11 structured record of a
+	// cross-principal IDOR comparison (see IDORComparison,
+	// ScanIDORCrossPrincipal): which AuthContext owns the resource, which
+	// AuthContext accessed it, and the deterministic relationship between
+	// them. It replaces free-form text as the source of truth for that
+	// comparison. nil (and omitted from JSON) for every finding except
+	// those produced by ScanIDORCrossPrincipal - in particular,
+	// ScanIDORWithContext's single-principal findings never populate it,
+	// and non-IDOR findings are entirely unaffected.
+	IDORComparison *IDORComparison `json:"idor_comparison,omitempty"`
 }
 
 // Evidence is a structured, redaction-bounded record of what was actually
