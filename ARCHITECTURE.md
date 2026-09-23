@@ -503,6 +503,36 @@ This layer is deferred until the current Verification phase is completed and app
 
 ---
 
+### Authorized Identity & Session Management Layer — Future
+
+**Purpose:**
+Provide ARFA with a dedicated future layer for managing authorized test identities required for authenticated and multi-principal security testing. The layer is intended to allow ARFA to provision, securely store, authenticate with, reuse, and manage test accounts and their sessions when the target and testing scope explicitly authorize those actions.
+
+**Scope:**
+This layer may provide:
+
+- **Account Provisioning:** Automatically create authorized test accounts when account creation is permitted by the target/testing scope.
+- **Credential Vault:** Securely store passwords, tokens, cookies, API keys, and other authentication secrets outside findings, reports, scan history, and general evidence.
+- **Identity Registry:** Maintain stable references for test accounts and associate them with the authorized target/scope.
+- **Session Management:** Create, maintain, refresh, expire, and invalidate authenticated sessions as required by the target.
+- **Authentication Automation:** Perform authorized login/authentication flows using credentials stored in the vault.
+- **Multi-Principal Testing:** Provide multiple explicitly authorized identities to scanners for scenarios such as IDOR and authorization-boundary testing.
+- **Identity Reuse:** Allow previously provisioned authorized test identities and valid authentication contexts to be reused across subsequent scans without manually recreating them.
+- **Evidence Integration:** Link findings and evidence to safe identity/session references while never placing raw credentials or authentication secrets into findings, reports, or scan history.
+- **Credential Lifecycle:** Support controlled creation, rotation, update, disablement, and deletion of stored test credentials and accounts.
+
+**Authorization Boundary:**
+All account creation, authentication, session use, and credential handling must remain explicitly bounded by the operator-provided authorization scope. ARFA must not autonomously create accounts, obtain credentials, authenticate to targets, or perform authenticated actions outside an explicitly authorized testing context.
+
+**Relationship to TD #11:**
+TD #11 defines the current `AuthContext` and IDOR principal/session context contract used by the scanner and evidence model. This future layer will provide the underlying managed identities and sessions that can populate those contexts. It must integrate with the existing contract rather than redesign or replace it.
+
+**Security Boundary:**
+Authentication secrets are sensitive operational data and must be isolated from normal scanner findings, reports, evidence, and history. Components consuming authentication context should receive stable references or controlled access to secrets rather than persisting raw credentials in security findings.
+
+**Status:**
+Future architectural capability. Not part of the current TD #11 implementation and must not reopen, modify, or redesign completed phases or TDs. Detailed implementation, storage technology, provisioning mechanisms, authentication adapters, and CLI/API interfaces will be designed only when this layer is formally scheduled.
+
 # 16. Agentic AI Layer — PentesterFlow
 
 A future agentic layer may provide controlled penetration-testing workflows.

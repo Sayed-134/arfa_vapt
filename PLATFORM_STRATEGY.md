@@ -806,6 +806,26 @@ Phase implementation      — When does it actually get built?
 
 ---
 
+## Authorized Identity & Session Management
+
+ARFA's future platform strategy includes a dedicated capability for managing authorized testing identities and authentication sessions.
+
+The capability is intended to support:
+
+- Provisioning authorized test accounts when the testing scope permits account creation.
+- Secure credential and authentication-secret storage through a dedicated vault boundary.
+- Authentication and session lifecycle management.
+- Reusable authorized identities and sessions across subsequent scans.
+- Multiple principals for IDOR and authorization-boundary testing.
+- Identity-aware evidence, findings, and reporting using safe references rather than raw secrets.
+- Credential lifecycle management including rotation, update, disablement, and deletion.
+
+All identity, account, authentication, and session operations must remain explicitly bounded by the authorized testing scope. Raw credentials and authentication secrets must remain outside findings, reports, scan history, and normal evidence.
+
+This capability is a future platform layer and is not part of the current TD #11 implementation. It will integrate with TD #11's existing `AuthContext` contract rather than replace or redesign it.
+
+For the detailed architectural definition, see `ARCHITECTURE.md — Authorized Identity & Session Management Layer — Future`.
+
 ## 16. Source of Truth
 
 When documents disagree, the following order applies:

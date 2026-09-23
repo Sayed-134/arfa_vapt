@@ -450,7 +450,8 @@ requests خاضعة لسياسة واحدة واضحة، thread-safe، قابل�
 
 ## TD #11 — IDOR authenticated principal/session context
 
-**Status:** Ready for Implementation
+**Status:** Closed / Frozen
+**Implementation:** commit 1da9cb7 (merged via PR #31)
 **Depends on:** Phase 3 (مغلق)
 **Blocks:** لا شيء
 

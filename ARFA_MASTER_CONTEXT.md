@@ -106,9 +106,9 @@ Completed and frozen in Phase 4:
 - TD #8 — Global/cancellable rate limiter policy
 - TD #9 — Complete relevant probe request/response evidence
 - TD #17 — Method-aware parameter selection in detectors
+- TD #11 — IDOR authenticated principal/session context
 
 Remaining open:
-- TD #11 — IDOR authenticated principal/session context
 - TD #12 — History storage persistence/locking/retention
 - TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 - TD #15 — LLM Input/Output Redaction
@@ -206,6 +206,27 @@ Deterministic Scanner + Evidence/Verification Engine + Intelligence Layer + Boun
 Key differentiator:
 When one technique fails, the AI should reason from coverage and evidence to select another appropriate next action, rather than simply stopping. Scope, authorization, verification, and evidence remain authoritative.
 
+## Future Capability — Authorized Identity & Session Management
+
+ARFA's future architecture includes a dedicated Authorized Identity & Session Management layer for authorized authenticated testing.
+
+The planned capability includes:
+
+- authorized test-account provisioning;
+- secure credential/secret storage;
+- authentication and session lifecycle management;
+- reusable identity/session contexts;
+- multi-principal testing for authorization scenarios;
+- identity-aware evidence and findings;
+- strict authorization-scope enforcement.
+
+Raw credentials/secrets must remain isolated from findings, reports, scan history, and normal evidence. Findings should reference safe identity/session identifiers.
+
+This capability is **future/planned only** and is **not part of the current TD #11 implementation**. TD #11 provides the current `AuthContext` contract that this future layer can integrate with.
+
+**Current status:** Planned / Not Implemented.
+
+
 ## 18. Completed Work — Historical Record
 
 ### Phase 1 — Foundation & Contracts — CLOSED / FROZEN
@@ -262,9 +283,10 @@ Completed and frozen:
 - TD #8 — Global/cancellable rate limiter policy
 - TD #9 — Complete relevant probe request/response evidence
 - TD #17 — Method-aware parameter selection in detectors
+- TD #11 — IDOR authenticated principal/session context
+  - Implementation: commit 1da9cb7 (merged via PR #31)
 
 Remaining open:
-- TD #11 — IDOR authenticated principal/session context
 - TD #12 — History storage persistence/locking/retention
 - TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 - TD #15 — LLM Input/Output Redaction
