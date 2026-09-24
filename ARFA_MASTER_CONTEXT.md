@@ -106,10 +106,13 @@ Completed and frozen in Phase 4:
 - TD #8 — Global/cancellable rate limiter policy
 - TD #9 — Complete relevant probe request/response evidence
 - TD #17 — Method-aware parameter selection in detectors
+
 - TD #11 — IDOR authenticated principal/session context
+  - Implementation: commit 1da9cb7 (merged via PR #31)
+- TD #12 — History storage persistence/locking/retention
+  - Implementation: commit 10c4e50 (merged via PR #33)
 
 Remaining open:
-- TD #12 — History storage persistence/locking/retention
 - TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 - TD #15 — LLM Input/Output Redaction
 
@@ -285,9 +288,10 @@ Completed and frozen:
 - TD #17 — Method-aware parameter selection in detectors
 - TD #11 — IDOR authenticated principal/session context
   - Implementation: commit 1da9cb7 (merged via PR #31)
+- TD #12 — History storage persistence/locking/retention
+  - Implementation: commit 10c4e50 (merged via PR #33)
 
 Remaining open:
-- TD #12 — History storage persistence/locking/retention
 - TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 - TD #15 — LLM Input/Output Redaction
 
