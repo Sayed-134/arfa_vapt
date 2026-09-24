@@ -561,7 +561,8 @@ principal/session اللي نفذ الاختبار، بحيث اختلاف respo
 
 ## TD #12 — History storage persistence/locking/retention
 
-**Status:** Ready for Implementation
+**Status:** Closed / Frozen
+**Implementation:** commit 10c4e50 (merged via PR #33)
 **Depends on:** لا شيء
 **Blocks:** لا شيء
 **Note:** يطوّر `pkg/db` الموجود، مش `pkg/history` جديد.
