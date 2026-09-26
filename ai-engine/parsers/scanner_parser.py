@@ -1,6 +1,6 @@
 import hashlib
 import json
-from typing import List, Dict, Any, Union
+from typing import List, Dict, Any, Optional, Union
 
 from schemas.common import (
     RawGoFinding,
@@ -9,6 +9,7 @@ from schemas.common import (
     ConfidenceLevel,
     VerificationStatus,
     FindingStatus,
+    IDORComparisonModel,
 )
 
 
@@ -70,13 +71,41 @@ def _compute_fingerprint(
     name: str,
     endpoint: str,
     parameter: Union[str, None],
+    idor_comparison: Optional[IDORComparisonModel] = None,
 ) -> str:
+    """Deterministic, collision-resistant grouping key for a finding.
+
+    TD #11 correction (mirrors the identical fix in Go's
+    pkg/scanner/scanner.go:fingerprint()): category|name|endpoint|parameter
+    alone is not a sufficient grouping key for a cross-principal IDOR
+    finding, because it carries no information distinguishing *which*
+    accessor principal improperly reached *which* owner's resource - two
+    distinct accessors compared against the same owner at the same
+    endpoint/parameter would otherwise collide onto the same fingerprint,
+    and deduplicate_findings() would silently keep only the stronger of
+    the two, discarding a second, independently significant relationship.
+
+    When idor_comparison is present, its owner/accessor AuthContext
+    identities - already safe, non-secret, deterministically derived
+    references (see pkg/models/auth_context.go) - are folded into the
+    hash input. This changes the fingerprint only for findings that carry
+    idor_comparison; every other finding's fingerprint is unchanged, since
+    the appended segment is empty when idor_comparison is None.
+
+    This documents the same general contract as the Go-side fix: any
+    structured field capable of legitimately distinguishing two findings
+    that would otherwise collide on category|name|endpoint|parameter must
+    participate in this input.
+    """
     norm_cat = (category or "").strip().lower()
     norm_name = (name or "").strip().lower()
     norm_ep = (endpoint or "").strip().lower()
     norm_param = (parameter or "").strip().lower()
 
     raw = f"{norm_cat}|{norm_name}|{norm_ep}|{norm_param}"
+
+    if idor_comparison is not None:
+        raw += f"|{idor_comparison.owner.identity}|{idor_comparison.accessor.identity}"
 
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
@@ -143,6 +172,7 @@ def parse_raw_go_finding(raw: RawGoFinding) -> NormalizedFinding:
         name,
         endpoint,
         parameter,
+        idor_comparison=raw.idor_comparison,
     )
 
     finding_id = f"ARFA-{fingerprint[:12].upper()}"
@@ -168,6 +198,8 @@ def parse_raw_go_finding(raw: RawGoFinding) -> NormalizedFinding:
         composite_risk_score=0.0,
         dedup_fingerprint=fingerprint,
         occurrence_count=1,
+        auth_context=raw.auth_context,
+        idor_comparison=raw.idor_comparison,
     )
 
 

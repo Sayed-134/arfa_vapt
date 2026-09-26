@@ -745,8 +745,42 @@ func dedup(fs []models.Finding) []models.Finding {
 	}
 	return o
 }
+
+// fingerprint computes a deterministic, collision-resistant grouping key
+// for f within a single scan - it identifies "the same logical finding"
+// for dedup(), not a claim of global uniqueness across scans or targets.
+//
+// TD #11 correction: Category|Endpoint|Parameter|Evidence is not a
+// sufficient grouping key for a cross-principal IDOR finding, because
+// ScanIDORCrossPrincipal's Evidence text (see pkg/detectors/idor.go) is a
+// fixed template string, identical for every accessor compared against a
+// given owner/endpoint/parameter - the field that actually distinguishes
+// two such findings (which principal accessed the resource) lives only in
+// f.IDORComparison, which the pre-TD#11 input tuple above never saw. Left
+// uncorrected, two distinct accessors improperly reaching the same
+// owner's resource would silently collapse onto one fingerprint, and
+// dedup() below would keep only the first, discarding a second,
+// independently significant security fact.
+//
+// The fix is additive and narrowly scoped to the one dimension TD #11
+// introduced: when f.IDORComparison is present, its Owner and Accessor
+// AuthContext identities - already safe, non-secret, deterministically
+// derived references (see pkg/models/auth_context.go) - are folded into
+// the hash input. This changes fingerprint()'s output only for findings
+// that carry an IDORComparison; every other finding's fingerprint is
+// byte-for-byte unchanged, since the appended segment is empty when
+// IDORComparison is nil.
+//
+// This documents the general contract going forward: any structured field
+// capable of legitimately distinguishing two findings that would
+// otherwise collide on Category|Endpoint|Parameter|Evidence must
+// participate in this input, the same way IDORComparison now does.
 func fingerprint(f models.Finding) string {
-	h := sha256.Sum256([]byte(f.Category + "|" + f.Endpoint + "|" + f.Parameter + "|" + f.Evidence))
+	input := f.Category + "|" + f.Endpoint + "|" + f.Parameter + "|" + f.Evidence
+	if f.IDORComparison != nil {
+		input += "|" + f.IDORComparison.Owner.Identity + "|" + f.IDORComparison.Accessor.Identity
+	}
+	h := sha256.Sum256([]byte(input))
 	return hex.EncodeToString(h[:8])
 }
 func severity(s string) int {
