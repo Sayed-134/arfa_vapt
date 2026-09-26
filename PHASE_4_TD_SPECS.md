@@ -672,7 +672,8 @@ identity واضحة.
 
 ## TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 
-**Status:** Ready for Implementation
+**Status:** Closed / Frozen
+**Implementation:** commit f0b679d (merged via PR #36)
 **Depends on:** TD #9 (evidence)
 **Blocks:** لا شيء
 **Note:** Python-only schema changes. `arfa.scan/v1` **مش** هيتغير.

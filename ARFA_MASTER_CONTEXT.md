@@ -111,9 +111,10 @@ Completed and frozen in Phase 4:
   - Implementation: commit 1da9cb7 (merged via PR #31)
 - TD #12 — History storage persistence/locking/retention
   - Implementation: commit 10c4e50 (merged via PR #33)
+- TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
+  - Implementation: commit f0b679d (merged via PR #36)
 
 Remaining open:
-- TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 - TD #15 — LLM Input/Output Redaction
 
 > Detailed implementation specifications for active Phase 4 TDs are
@@ -290,9 +291,10 @@ Completed and frozen:
   - Implementation: commit 1da9cb7 (merged via PR #31)
 - TD #12 — History storage persistence/locking/retention
   - Implementation: commit 10c4e50 (merged via PR #33)
+- TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
+  - Implementation: commit f0b679d (merged via PR #36)
 
 Remaining open:
-- TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
 - TD #15 — LLM Input/Output Redaction
 
 Current phase remains open until all required Phase 4 work is completed.
