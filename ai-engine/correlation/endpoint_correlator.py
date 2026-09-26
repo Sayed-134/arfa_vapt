@@ -1,10 +1,26 @@
-from typing import List, Dict
+import hashlib
+from typing import Dict, List
 from schemas.common import (
-    NormalizedFinding,
-    CorrelatedEndpoint,
     AttackChain,
+    ChainStage,
+    CorrelatedEndpoint,
+    NormalizedFinding,
+    Relationship,
+    RelationshipProof,
     SeverityLevel,
+    VerificationStatus,
 )
+
+# TD #13 — a Relationship is eligible to form a chain only when its source
+# finding's own verification_status is at least this strong. INCONCLUSIVE,
+# UNVERIFIED, and FALSE_POSITIVE can never produce an eligible
+# Relationship, and this status is preserved unchanged on the Relationship
+# and AttackChain - never upgraded, reinterpreted, or inflated.
+ELIGIBLE_RELATIONSHIP_VERIFICATION_STATUSES = {
+    VerificationStatus.CONFIRMED,
+    VerificationStatus.LIKELY,
+    VerificationStatus.PROBABLE,
+}
 
 SEVERITY_ORDER = {
     SeverityLevel.CRITICAL: 5,
@@ -60,79 +76,166 @@ def correlate_endpoints(
     return correlated_list
 
 
+def _relationship_id(
+    relationship_type: str,
+    finding_ids: List[str],
+    owner_identity: str,
+    accessor_identity: str,
+) -> str:
+    """Deterministic Relationship identity: same relationship_type +
+    participants + proof always yields the same id; a different
+    relationship_type or participant/proof always yields a different one.
+    Independent of Finding.id/dedup_fingerprint by design (TD #13)."""
+    raw = (
+        f"{relationship_type}|{','.join(sorted(finding_ids))}"
+        f"|{owner_identity}|{accessor_identity}"
+    )
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _chain_id(chain_type: str, relationship_ids: List[str]) -> str:
+    """Deterministic AttackChain identity, derived from its own
+    Relationships' ids - never from unordered set/dict iteration."""
+    raw = f"{chain_type}|{','.join(sorted(relationship_ids))}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+def _extract_cross_principal_relationships(
+    findings: List[NormalizedFinding],
+) -> List[Relationship]:
+    """Extract Evidence-backed Relationships (TD #13) from findings
+    carrying a structured TD #11 idor_comparison.
+
+    This is normalization, not inference: every Relationship built here
+    represents a fact Go's own verification-adjacent detector logic
+    (ScanIDORCrossPrincipal) already proved via idor_comparison - never a
+    conclusion drawn from category co-occurrence, endpoint/parameter
+    proximity, or payload/evidence text similarity. A finding's structured
+    idor_comparison is required; free-form text is never a substitute.
+
+    Eligibility is gated on the *source finding's own* verification_status
+    (CONFIRMED/LIKELY/PROBABLE only - see
+    ELIGIBLE_RELATIONSHIP_VERIFICATION_STATUSES); the status itself is
+    preserved unchanged on the resulting Relationship, never upgraded.
+    """
+    relationships: List[Relationship] = []
+
+    for f in findings:
+        if f.idor_comparison is None:
+            continue
+        if f.verification_status not in ELIGIBLE_RELATIONSHIP_VERIFICATION_STATUSES:
+            continue
+
+        relationship_type = f.idor_comparison.relationship
+        rid = _relationship_id(
+            relationship_type,
+            [f.id],
+            f.idor_comparison.owner.identity,
+            f.idor_comparison.accessor.identity,
+        )
+        relationships.append(
+            Relationship(
+                relationship_id=rid,
+                relationship_type=relationship_type,
+                finding_ids=[f.id],
+                proof=RelationshipProof(
+                    owner=f.idor_comparison.owner,
+                    accessor=f.idor_comparison.accessor,
+                ),
+                verification_status=f.verification_status,
+            )
+        )
+
+    # Deterministic dedup by relationship_id. Today's extraction is 1:1
+    # per qualifying finding and should never produce a duplicate id, but
+    # the general model does not assume that will always hold for every
+    # future relationship type.
+    deduped: Dict[str, Relationship] = {}
+    for r in relationships:
+        deduped[r.relationship_id] = r
+
+    return sorted(deduped.values(), key=lambda r: r.relationship_id)
+
+
+def _build_cross_principal_chain(relationship: Relationship) -> AttackChain:
+    """One eligible cross_principal_access Relationship is, on its own, a
+    complete AttackChain: the relationship already asserts - as a single,
+    structured, already-proved fact - that a distinct authenticated
+    principal reached another principal's resource. There is no separate
+    "weakness" finding to combine it with, and none is invented here to
+    force a multi-finding shape. The owner participates only through its
+    AuthContext, exactly as Go's own IDORComparison represents it - never
+    through a fabricated second Finding."""
+    owner_label = relationship.proof.owner.principal.label
+    accessor_label = relationship.proof.accessor.principal.label
+
+    stages = [
+        ChainStage(
+            stage="unauthorized_cross_principal_access",
+            finding_id=relationship.finding_ids[0],
+            description=(
+                f"Principal '{accessor_label}' accessed a resource "
+                f"belonging to principal '{owner_label}' without "
+                f"authorization."
+            ),
+        ),
+    ]
+
+    chain_id = _chain_id(
+        relationship.relationship_type,
+        [relationship.relationship_id],
+    )
+
+    return AttackChain(
+        title="Cross-Principal Unauthorized Object Access",
+        description=(
+            "A distinct, explicitly authenticated principal accessed "
+            "another principal's resource without authorization, "
+            "evidenced by a structured cross-principal IDOR comparison."
+        ),
+        chain_type="CROSS_PRINCIPAL_ACCESS",
+        related_finding_ids=list(relationship.finding_ids),
+        potential_impact=(
+            "Unauthorized access to another principal's data or "
+            "resources through missing object-level authorization."
+        ),
+        relationships=[relationship],
+        stages=stages,
+        evidence_refs=list(relationship.finding_ids),
+        chain_id=chain_id,
+        verification_status=relationship.verification_status,
+    )
+
+
 def detect_attack_chains(
     findings: List[NormalizedFinding],
 ) -> List[AttackChain]:
-    chains: List[AttackChain] = []
+    """Build AttackChains from Evidence-backed Relationships only (TD #13).
 
-    cats: Dict[str, List[str]] = {}
+    An AttackChain is one or more eligible Relationships - never category
+    co-occurrence, same-endpoint/parameter proximity, payload/evidence
+    text similarity, or any other heuristic proximity signal. Those
+    remain, at most, supporting correlation (see correlate_endpoints,
+    unchanged by this function) and never independently produce a chain.
 
-    for f in findings:
-        cat_lower = f.category.lower()
+    Today's only relationship source is TD #11's structured
+    idor_comparison ("cross_principal_access"). Deterministic: the same
+    input findings always produce the same chains, in the same order.
+    """
+    known_ids = {f.id for f in findings}
 
-        if cat_lower not in cats:
-            cats[cat_lower] = []
+    relationships = _extract_cross_principal_relationships(findings)
+    chains = [_build_cross_principal_chain(r) for r in relationships]
 
-        cats[cat_lower].append(f.id)
+    # Final provenance invariant: every finding id a chain references must
+    # actually exist in the input findings. Given the extraction above only
+    # ever sources finding_ids from `findings` itself, this can only ever
+    # trip on a future relationship type's bug - it is kept as an explicit,
+    # testable guard rather than an assumption.
+    chains = [
+        c for c in chains if set(c.related_finding_ids).issubset(known_ids)
+    ]
 
-    auth_ids = (
-        cats.get("authentication", [])
-        + cats.get("session management", [])
-        + cats.get("authorization", [])
-    )
-
-    injection_ids = (
-        cats.get("sql injection", [])
-        + cats.get("command injection", [])
-        + cats.get("sqli", [])
-    )
-
-    idor_ids = (
-        cats.get("idor", [])
-        + cats.get("broken object level authorization", [])
-    )
-
-    if auth_ids and injection_ids:
-        chains.append(
-            AttackChain(
-                title="Broken Authentication to Remote Command / SQL Injection",
-                description="Weaknesses in authentication/authorization permit access to vulnerable endpoints where SQL or Command Injection can be executed unhindered.",
-                chain_type="AUTH_BYPASS_TO_RCE_OR_SQLI",
-                related_finding_ids=list(set(auth_ids + injection_ids)),
-                potential_impact="Complete database exfiltration or remote system compromise through unauthorized injection vectors.",
-            )
-        )
-
-    if auth_ids and idor_ids:
-        chains.append(
-            AttackChain(
-                title="Session Flaw to Direct Object Manipulation (IDOR)",
-                description="Improper session or token verification combined with IDOR allows unauthorized tenant data harvesting.",
-                chain_type="SESSION_FLAW_TO_DATA_LEAK",
-                related_finding_ids=list(set(auth_ids + idor_ids)),
-                potential_impact="Mass horizontal and vertical privilege escalation leading to multi-tenant data exposure.",
-            )
-        )
-
-    info_ids = (
-        cats.get("information disclosure", [])
-        + cats.get("sensitive data exposure", [])
-    )
-
-    xss_ids = (
-        cats.get("xss", [])
-        + cats.get("cross-site scripting", [])
-    )
-
-    if info_ids and xss_ids:
-        chains.append(
-            AttackChain(
-                title="Information Disclosure to Session Takeover via XSS",
-                description="Disclosed debug information or token formats reduce exploit complexity for stored or reflected Cross-Site Scripting.",
-                chain_type="INFO_LEAK_TO_ACCOUNT_TAKEOVER",
-                related_finding_ids=list(set(info_ids + xss_ids)),
-                potential_impact="Administrative account compromise and client-side secret exfiltration.",
-            )
-        )
+    chains.sort(key=lambda c: c.chain_id)
 
     return chains

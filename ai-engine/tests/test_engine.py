@@ -22,8 +22,42 @@ def test_full_pipeline_json_serialization_deserialization():
     assert sqli.verification_status == VerificationStatus.CONFIRMED
     assert sqli.evidence == "syntax error near unexpected token OR"
     assert len(reconstituted.correlated_endpoints) == 2
+    # TD #13: category co-occurrence (Authentication + SQL Injection here,
+    # with no structured idor_comparison on any finding) no longer
+    # produces an AttackChain - only an Evidence-backed Relationship does.
+    assert reconstituted.attack_chains == []
+
+
+def test_full_pipeline_cross_principal_idor_produces_attack_chain():
+    """End-to-end (TD #11 correction + TD #13): a Go-shaped finding
+    carrying a structured idor_comparison must survive JSON parsing,
+    fingerprinting, deduplication, and chain detection, and produce
+    exactly one CROSS_PRINCIPAL_ACCESS AttackChain in the final report."""
+    raw_scan_json = '''[
+      {"category":"IDOR","name":"Cross-Principal IDOR","severity":"HIGH","cvss":7.5,
+       "confidence":"CERTAIN","endpoint":"/api/v1/profile","parameter":"id",
+       "verification_status":"LIKELY",
+       "idor_comparison":{
+         "owner":{"principal":{"label":"owner"},"session_ref":"ref:owner","identity":"identity-owner"},
+         "accessor":{"principal":{"label":"accessor"},"session_ref":"ref:accessor","identity":"identity-accessor"},
+         "relationship":"cross_principal_access"
+       }}
+    ]'''
+    report = ARFAEngine(llm_url=None).process(raw_scan_json)
+    reconstituted = FinalReport.model_validate(json.loads(report.model_dump_json()))
+
+    assert reconstituted.metadata.input_findings_count == 1
+    finding = reconstituted.findings[0]
+    assert finding.idor_comparison is not None
+    assert finding.idor_comparison.accessor.principal.label == "accessor"
+
     assert len(reconstituted.attack_chains) == 1
-    assert reconstituted.attack_chains[0].chain_type == "AUTH_BYPASS_TO_RCE_OR_SQLI"
+    chain = reconstituted.attack_chains[0]
+    assert chain.chain_type == "CROSS_PRINCIPAL_ACCESS"
+    assert chain.related_finding_ids == [finding.id]
+    assert chain.verification_status == VerificationStatus.LIKELY
+    assert len(chain.relationships) == 1
+    assert chain.relationships[0].proof.owner.principal.label == "owner"
 
 def test_examples_scan_results_file_matches_parser():
     scan_file = Path(__file__).parent.parent / "examples" / "scan_results.json"
