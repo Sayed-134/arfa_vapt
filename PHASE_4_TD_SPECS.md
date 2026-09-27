@@ -790,7 +790,8 @@ rules إلى relationships مدعومة بالـevidence والـscan structure.
 
 ## TD #15 — LLM Input/Output Redaction
 
-**Status:** Ready for Implementation
+**Status:** Closed / Frozen
+**Implementation:** commit c3f07b9 (merged via PR #38)
 **Depends on:** TD #9 (shared redaction utility)
 **Blocks:** لا شيء
 
