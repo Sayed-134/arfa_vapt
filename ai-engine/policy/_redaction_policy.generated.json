@@ -1,0 +1,11 @@
+{
+  "placeholder": "[REDACTED]",
+  "sensitive_header_names": [
+    "authorization",
+    "cookie",
+    "proxy-authorization",
+    "set-cookie",
+    "x-api-key"
+  ],
+  "source": "pkg/redact/redact.go"
+}
