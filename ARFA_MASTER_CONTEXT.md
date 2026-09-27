@@ -114,8 +114,8 @@ Completed and frozen in Phase 4:
 - TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
   - Implementation: commit f0b679d (merged via PR #36)
 
-Remaining open:
 - TD #15 — LLM Input/Output Redaction
+  - Implementation: commit c3f07b9 (merged via PR #38)
 
 > Detailed implementation specifications for active Phase 4 TDs are
 > maintained in PHASE_4_TD_SPECS.md. Only the TD currently being
@@ -178,7 +178,10 @@ Do not develop large changes directly on main.
 Do not keep duplicate project copies.
 
 ## 14. Current milestone
-Phase 4 — Technical Debt (IN PROGRESS).
+Phase 4 — Technical Debt is CLOSED / FROZEN.
+
+The next phase has not yet been formally defined.
+Its scope, capabilities, and implementation plan will be determined through the project intake process.
 
 ## 15. Agent instructions
 Before architectural changes, read this file and inspect the actual repository.
@@ -271,7 +274,7 @@ Implemented and validated:
 
 Do not reopen or redesign Phase 3 without explicit user approval.
 
-### Phase 4 — Technical Debt — IN PROGRESS
+### Phase 4 — Technical Debt — CLOSED / FROZEN
 
 Completed and frozen:
 - TD #7 — Bounded Scan Duration
@@ -294,10 +297,10 @@ Completed and frozen:
 - TD #13 — Attack-chain detection beyond rule/co-occurrence heuristics
   - Implementation: commit f0b679d (merged via PR #36)
 
-Remaining open:
 - TD #15 — LLM Input/Output Redaction
+  - Implementation: commit c3f07b9 (merged via PR #38)
 
-Current phase remains open until all required Phase 4 work is completed.
+Do not reopen or redesign Phase 4 without explicit user approval.
 
 ## Future Platform Boundaries — Locked Direction
 
