@@ -1,874 +1,1297 @@
 # ARFA VAPT — Platform Strategy
 
-> **Status:** Strategic reference — long-term vision and architectural direction.
-> **Scope:** Defines how ARFA is designed as a platform, not what is implemented today.
-> **Relationship to other documents:**
-> - `ARCHITECTURE.md` — complete architectural design of the current system
-> - `ARFA_MASTER_CONTEXT.md` — current state, closed milestones, active roadmap
-> - `PLATFORM_STRATEGY.md` (this file) — long-term vision, extension model, architectural principles
-> - **Code** — the actual, verified source of truth for what exists
+> **Status:** Strategic reference — long-term product direction, platform principles, ecosystem strategy, and capability intake.
+> **Scope:** Defines how ARFA grows as a platform. It does not claim that future capabilities are implemented today.
+> **Relationship to other sources:**
+> - `ARCHITECTURE.md` — authoritative architectural direction and boundaries.
+> - `ARFA_MASTER_CONTEXT.md` — authoritative current project state, completed work, active phase, and roadmap execution state.
+> - Repository `main` / actual source code — authoritative source for implemented behavior.
+> - This document — long-term strategy, platform principles, extension/integration strategy, and intake rules.
 
 ---
 
-## 1. Vision & Philosophy
+## 1. Strategy Statement
 
-ARFA VAPT is designed as a **platform**, not as a scanner that grows features over time.
+ARFA VAPT is designed as a **unified authorized assessment and security-intelligence platform**, not as a scanner that accumulates unrelated features.
 
-The founding principle:
+The strategic principle is:
 
-> **Design ARFA for the scale of tomorrow's product. Build it incrementally with strict engineering discipline.**
+> **Design for the complete product. Implement incrementally. Preserve the verified truth path. Expand capability without sacrificing authorization, evidence, verification, or control.**
 
-This means:
+This creates two simultaneous obligations:
 
-1. **The architecture describes the complete product we intend to reach** — not only what is implemented today.
-2. **The core is stable and versioned** — extensions and new capabilities must not force the core to be rebuilt.
-3. **New capabilities are added by extension, not by rewrite** — whether they arrive next month or in ten years.
-4. **Planning is big; execution is incremental; engineering discipline is strict.**
+1. **Think broadly:** the platform must be able to grow into Web, API, Browser, Mobile, Web3, Traffic, external reconnaissance, OAST, AI-assisted analysis, attack-chain correlation, reporting, continuous assessment, integrations, and extensibility.
+2. **Build narrowly:** each phase must have a bounded scope, explicit contracts, tests, review, and a clean merge/freeze point.
 
-ARFA does not set a ceiling on itself based on the capabilities of today's tools, the size of today's team, or the state of today's code.
-
-ARFA also does not use "big vision" as permission to skip contracts, tests, or phasing.
-
-Both statements hold simultaneously. The rest of this document defines how.
+A large strategy is not permission to implement everything at once.
+A small current implementation is not permission to design tomorrow's capabilities as dead ends.
 
 ---
 
-## 2. The Four Layers
+## 2. Strategy vs Architecture vs Roadmap vs Phase vs Code
 
-ARFA's development follows four distinct conceptual layers. Confusing them is the source of most architectural drift.
+These are different layers and must not be mixed.
 
-```
-┌─────────────────────────────────────────────────────┐
-│  ARCHITECTURE                                       │
-│  The complete picture of what ARFA is designed      │
-│  to become.                                         │
-│  → ARCHITECTURE.md                                  │
-└─────────────────────────────────────────────────────┘
-                        ↓
-┌─────────────────────────────────────────────────────┐
-│  ROADMAP                                            │
-│  The order in which capabilities are reached.       │
-│  Updated as the project evolves.                    │
-│  → ARFA_MASTER_CONTEXT.md                           │
-└─────────────────────────────────────────────────────┘
-                        ↓
-┌─────────────────────────────────────────────────────┐
-│  PHASE                                              │
-│  The specific work being executed now.              │
-│  Bounded, tested, reviewable, reversible.           │
-└─────────────────────────────────────────────────────┘
-                        ↓
-┌─────────────────────────────────────────────────────┐
-│  CODE                                               │
-│  What is actually implemented and verified.         │
-│  The ultimate source of truth.                      │
-└─────────────────────────────────────────────────────┘
+```text
+ARCHITECTURE
+Complete product structure, boundaries, contracts, and invariants
+        ↓
+PLATFORM STRATEGY
+Long-term growth principles, ecosystem, extensions, integrations, intake
+        ↓
+ROADMAP
+Current ordering of capabilities and implementation priorities
+        ↓
+PHASE / TD
+One bounded implementation unit
+        ↓
+CODE
+What is actually implemented and verified
 ```
 
-**Rules:**
+### Rules
 
-- Architecture is allowed to describe capabilities that do not exist yet.
-- Roadmap is allowed to change.
-- Phases are allowed to be small.
-- Code is never allowed to lie about itself.
-
-A capability existing in the Architecture does **not** mean it exists in the code.
-A capability existing in the Roadmap does **not** mean it is being built now.
-
----
-
-## 3. Stable Core Contracts
-
-The core is **stable**, not immutable.
-
-Immutability is a myth: even `ScanEnvelope v1` may eventually require `v2`. What matters is that:
-
-- The core defines a small set of **contracts** that everything else depends on.
-- Changes to those contracts are **versioned**, **documented**, and **compatible-by-default**.
-- Extensions and capabilities are added **around** the core, not by rewriting it.
-
-### Core contracts (stable, versioned)
-
-| Contract | Purpose |
-|----------|---------|
-| Authorization / Scope | Gate every active operation. Non-negotiable. |
-| Scan Job | A unit of scanning work. |
-| ScanEnvelope | The JSON boundary between the Go scanner and downstream analysis. |
-| Finding | The authoritative result model. Additive extensions only. |
-| Verification Status | The currently defined verification statuses as documented in `ARCHITECTURE.md` and implemented in the codebase. |
-| Verification Confidence | Additive detail derived from verification evidence. |
-| Evidence | Structured, redaction-bounded proof for a finding. |
-| Coverage | Endpoint × Parameter × Vulnerability-class tracking. |
-| Planner / execution contracts | Deterministic next-action derivation. |
-| Pipeline lifecycle | Discovery → Detection → Verification → Evidence → Finding → Report. |
-| Reporting contracts | Final JSON output and its schema. |
-| Extension contracts | The interfaces by which new capabilities plug in. |
-
-> **Note on Verification Status:** This document does not introduce new verification statuses. The authoritative list is defined by `ARCHITECTURE.md` and the current code. Any future addition to that list is a versioned core change, subject to the rules in §3 and §7.
-
-### The Core Rule
-
-> **An extension must never force a change to the core.**
-
-If an extension requires a core change, one of two things is true:
-
-1. The extension is not yet shaped correctly, and should be reshaped.
-2. The core is genuinely missing a capability, and a **versioned** core change is required — with explicit architectural approval, backward compatibility, and regression coverage.
-
-There is no third option.
+- `ARCHITECTURE.md` defines the architectural destination and boundaries.
+- `PLATFORM_STRATEGY.md` defines how the platform should evolve without losing coherence.
+- `ARFA_MASTER_CONTEXT.md` defines the current operational state and roadmap.
+- A phase/TD defines only the work explicitly authorized for that unit.
+- The repository defines what actually exists.
+- A capability appearing in strategy or architecture is **not** evidence that it is implemented.
+- A roadmap item is **not** an active implementation scope until a phase/TD is opened.
+- A phase must not be used to discover fundamental architecture accidentally. If implementation reveals a genuine architectural conflict, stop and record the decision before expanding scope.
 
 ---
 
-## 4. Extension System
+## 3. Platform Growth Principles
 
-### 4.1 Concept — Multi-Capability
+### 3.1 No self-imposed ceiling
 
-An ARFA extension is **not** "a detector." It is a package that may contribute one or more of the following capabilities:
+ARFA should not reject a useful capability merely because it is larger than today's codebase, team, or tooling.
+
+Potential capabilities may include:
+
+- Web and API assessment
+- Browser-assisted assessment
+- Traffic interception and manipulation
+- Mobile Android/iOS assessment
+- Web3 and dApp assessment
+- External attack-surface discovery
+- OAST / out-of-band verification
+- Race and concurrency testing
+- Authentication and authorization testing
+- AI-assisted analysis and correlation
+- Attack-chain construction
+- Continuous assessment
+- External security-tool integrations
+- Extensions/plugins
+- Knowledge and methodology services
+- Enterprise reporting, governance, and auditability
+
+The architectural question is whether the capability can be integrated while preserving the platform's invariants — not whether the capability is too ambitious.
+
+### 3.2 No self-imposed rush
+
+The platform is built incrementally.
+
+A capability may be accepted into the long-term architecture without being placed on the current roadmap. A roadmap item may remain unscheduled until prerequisites are ready.
+
+### 3.3 Preserve before replacing
+
+Existing verified behavior is preserved by default.
+
+A replacement is justified only when it provides a measurable architectural or operational advantage and the migration path is explicit.
+
+### 3.4 Reuse contracts, not accidental implementations
+
+Future components should reuse stable contracts and domain semantics where appropriate, not copy internal implementation details merely because they already exist.
+
+### 3.5 Additive growth is preferred
+
+New capability should normally be additive:
+
+- new execution engines,
+- new adapters,
+- new verification strategies,
+- new evidence processors,
+- new integrations,
+- new extensions,
+- new UI workspaces,
+- new domain models where genuinely required.
+
+Core contract changes remain possible, but must be deliberate, versioned, compatible-by-default, and regression-tested.
+
+---
+
+## 4. The Platform Shape
+
+ARFA's strategic shape follows the architectural model in `ARCHITECTURE.md`:
+
+```text
+                 ┌──────────────────────────────┐
+                 │        User / API / UI       │
+                 └──────────────┬───────────────┘
+                                ↓
+                 ┌──────────────────────────────┐
+                 │        Assessment Control     │
+                 │ scope • auth • policy • run   │
+                 │ budget • lifecycle • recovery │
+                 └──────────────┬───────────────┘
+                                ↓
+        ┌───────────────────────┴───────────────────────┐
+        │                                               │
+┌───────▼────────┐                              ┌───────▼────────┐
+│ Execution       │                              │ Intelligence   │
+│ Engines         │                              │ Layer          │
+│ Web/API         │                              │ AI / Knowledge │
+│ Browser         │                              │ Correlation    │
+│ Mobile          │                              │ Risk / Chains  │
+│ Web3            │                              │ Planning       │
+│ Traffic/OAST    │                              └────────────────┘
+│ Recon/Tools     │
+└───────┬────────┘
+        ↓
+ Observation → Verification → Evidence → Finding
+        ↓
+ Correlation → Attack Chain → Risk → Report / Next Action
+```
+
+The strategic consequence is important:
+
+> ARFA is not required to force every capability into the original Go scanner.
+
+The platform can grow through domain-native engines and constrained execution agents while preserving one assessment/control model and one authoritative truth path.
+
+---
+
+## 5. Truth, Evidence, and AI
+
+### 5.1 Deterministic truth path
+
+The platform's central security invariant is:
+
+```text
+Observation
+    ↓
+Hypothesis / Candidate Test
+    ↓
+Bounded Execution
+    ↓
+Verification
+    ↓
+Evidence
+    ↓
+Finding
+```
+
+AI, external tools, heuristics, differential analysis, and knowledge systems may contribute observations, hypotheses, prioritization, or analysis.
+
+They do **not** bypass verification and evidence requirements to create authoritative findings.
+
+### 5.2 Evidence is a platform asset
+
+Evidence must be:
+
+- attributable to an authorized assessment/action,
+- bounded and appropriately redacted,
+- linked to the observation and verification that produced it,
+- durable enough for audit and reporting,
+- protected from accidental secret leakage,
+- traceable to its producer and relevant tool/version.
+
+### 5.3 Provenance
+
+The platform should preserve provenance across:
+
+- native detectors,
+- domain execution engines,
+- extensions,
+- external tools,
+- browser actions,
+- traffic observations,
+- OAST interactions,
+- AI analysis,
+- correlation and attack-chain construction.
+
+Provenance answers: **what happened, who/what produced it, under which assessment/action, and what evidence supports the conclusion?**
+
+### 5.4 AI boundary
+
+AI is an intelligence layer, not the source of security truth.
+
+AI may:
+
+- analyze observations,
+- correlate findings,
+- summarize evidence,
+- identify candidate relationships,
+- propose next actions,
+- prioritize work,
+- assist with attack-chain reasoning,
+- use approved knowledge sources.
+
+AI must not silently:
+
+- bypass authorization,
+- expand scope,
+- convert an unsupported hypothesis into a confirmed finding,
+- discard contradictory evidence,
+- hide tool failures,
+- fabricate evidence or execution history.
+
+Any bounded agentic workflow must remain under the control-plane policies, budgets, action lifecycle, and evidence model.
+
+---
+
+## 6. Core Contract Strategy
+
+The platform should maintain a **small set of composable contracts** rather than one universal data object that accumulates every future feature.
+
+Important contract families include:
+
+| Contract family | Strategic role |
+|---|---|
+| Authorization / Scope | Defines what the platform is allowed to touch. |
+| Assessment / Run | Defines the bounded assessment lifecycle. |
+| Action / Execution | Gives each active operation identity, policy, budget, and recovery semantics. |
+| Observation | Normalizes what an engine, tool, browser, or adapter observed. |
+| Verification | Records how a hypothesis was tested and with what result. |
+| Evidence | Preserves bounded proof and provenance. |
+| Finding | Defines the authoritative security result. |
+| Coverage / Test Obligation | Tracks what was attempted, what was not, and why. |
+| Readiness | Separately describes whether a target was meaningfully assessable. |
+| Asset / Relationship | Represents the attack surface and its relationships. |
+| Report / Output | Exposes stable reader-facing results. |
+| Extension / Integration | Defines controlled capability contributions. |
+
+The existing `arfa.scan/v1` boundary remains readable and compatible. Future growth should prefer additive/composable records and versioned contracts over an uncontrolled universal envelope.
+
+---
+
+## 7. Extension Strategy
+
+### 7.1 Extension is a capability mechanism, not the only capability mechanism
+
+Extensions are appropriate when a capability can be safely added through a stable contract.
+
+Some capabilities require first-class platform ownership because they define major execution, lifecycle, security, or data semantics. Examples include:
+
+- assessment control,
+- authorization/scope enforcement,
+- core evidence custody,
+- identity/session security boundaries,
+- traffic infrastructure,
+- browser assessment engine,
+- major Mobile/Web3 execution engines.
+
+Therefore:
+
+> **Use extensions where extension semantics fit. Use native platform/domain components where first-class semantics are required.**
+
+### 7.2 Multi-capability extensions
+
+An extension may provide one or more capabilities, such as:
 
 - Detector
 - Verifier
 - Analyzer
-- Crawler / Discovery capability
+- Discovery/Crawler
 - Payload provider
 - Evidence processor
 - Correlation capability
 - Risk capability
-- Integration / Bridge
-- Language / framework intelligence
+- Integration/Bridge
+- Language/framework intelligence
 
-An extension is not required to implement all of them. It is required to **declare** which it implements, in its manifest.
+The extension declares its capabilities instead of being treated as merely a detector plugin.
 
-**Example:**
+### 7.3 Extension lifecycle
 
-```
-Extension: java-security
-Capabilities:
-  - Java framework detection
-  - Java-specific detector (deserialization, expression injection, ...)
-  - Java-specific payload provider
-  - Java-specific verification
+The strategic lifecycle is:
+
+```text
+Discover → Register → Validate → Enable → Configure → Run
+       → Disable → Upgrade → Remove
 ```
 
-This is stronger than a flat "Java / PHP / .NET" folder split, because a language by itself is not a capability — the capabilities that a language enables are.
+Every transition is explicit and auditable.
 
-### 4.2 Extension Contract
+### 7.4 Manifest
 
-The architecture must define **what an extension is**, before deciding **how it is loaded**.
-
-At minimum, the contract defines:
-
-- What an extension declares (capabilities, targets, dependencies).
-- What an extension is given (core services, configuration, target context).
-- What an extension may return (findings, evidence, coverage updates).
-- What an extension may never do (modify core contracts, bypass authorization, silently override verification).
-
-The contract is the same regardless of how the extension is packaged or loaded.
-
-### 4.3 Extension Registry
-
-The registry is the core's view of what extensions are available.
-
-Responsibilities:
-
-- Discover extensions
-- Register them
-- Validate their manifests
-- Track their lifecycle state
-- Expose their capabilities to the pipeline
-
-The registry does not execute extensions. It knows about them.
-
-### 4.4 Extension Lifecycle
-
-Every extension passes through a defined lifecycle:
-
-```
-Discover → Register → Validate → Enable → Configure → Run → Disable → Upgrade → Remove
-```
-
-Each transition is explicit. Failure at any stage must be isolated.
-
-### 4.5 Manifest
-
-Every extension carries a manifest describing itself. Required fields:
+The extension manifest should declare at minimum:
 
 - `name`
 - `id`
 - `version`
 - `extension_api_version`
 - `core_compatibility`
-- `capabilities` (list of capability types)
-- `dependencies`
-- `configuration_schema`
-- `supported_targets` / `supported_frameworks`
-- `security` / `trust` metadata
+- capabilities
+- dependencies
+- configuration schema
+- supported targets/frameworks
+- security/trust metadata
+- required permissions/capabilities
 
-Optional metadata:
+### 7.5 Trust boundary
 
-- `author`
-- `description`
-- `license`
+An extension must not automatically receive access to:
 
-The manifest is the contract between the extension and the core. The core trusts nothing that is not declared in the manifest.
+- target traffic,
+- filesystem,
+- network,
+- credentials,
+- session material,
+- secrets,
+- privileged execution.
 
-### 4.6 Trust & Security
+Access must be declared, mediated by policy, bounded, and auditable.
 
-Extensions are a security boundary. The architecture must treat them as such from the beginning, even before the extension system is implemented.
+The extension runtime mechanism remains an implementation decision for the phase that builds it. The strategic contract must not depend on a single loading technology.
 
-Principles:
+### 7.6 Failure isolation
 
-- An extension **does not automatically gain access** to target traffic, filesystem, network, or secrets.
-- Access is **declared** in the manifest and **granted** by policy.
-- Extensions may be **isolated** from each other.
-- Extensions have **resource limits** (CPU, memory, network, runtime).
-- Extensions have **explicit permissions** for any privileged operation.
+A failing extension should not corrupt the assessment or bring down the control plane.
 
-This is true even when the extension system is only built-in.
-
-### 4.7 Isolation & Failure Handling
-
-> **A failing extension must not bring down the core.**
-
-Every extension invocation is bounded by:
-
-- Timeouts
-- Panics / errors caught at the boundary
-- Resource limits
-- Explicit rollback of partial state
-
-If an extension fails, the pipeline records the failure, coverage reflects an inconclusive outcome for the affected cells, and the scan continues.
-
-### 4.8 Loading & Runtime — Deferred Decision
-
-The architecture must **not** commit to a specific loading/runtime mechanism today.
-
-Possible mechanisms include:
-
-- Built-in (compiled into the binary)
-- Process-local plugins
-- External processes (e.g. gRPC)
-- WebAssembly
-- Other mechanisms not yet available
-
-Each has tradeoffs. The correct choice depends on the state of the ecosystem at the time the extension system is implemented.
-
-**What the architecture commits to:**
-
-```
-Extension Contract
-        ↓
-Extension Registry
-        ↓
-Extension Lifecycle
-        ↓
-Loader / Runtime   ← implementation decision, per phase
-```
-
-The architecture defines the first three. It leaves the fourth open.
-
-The architecture **must** be designed so that external extensions are possible — even if the first implementation is built-in.
+Failures should be represented as bounded execution outcomes and should not be silently converted into success or false security conclusions.
 
 ---
 
-## 5. Integration Boundary
+## 8. Integration Strategy
 
-ARFA does not exist in a vacuum. It must coexist with the rest of the security tooling ecosystem.
+ARFA is designed to coexist with the security-tool ecosystem.
 
-### 5.1 Integration as a First-Class Concept
+### 8.1 External tools are capability sources
 
-Integration with external tools is an architectural capability, not a feature.
+External tools can contribute:
 
-The integration boundary must support, over time:
+- observations,
+- requests/responses,
+- findings,
+- evidence,
+- discovery data,
+- specialized scanning,
+- browser/traffic capabilities,
+- protocol support.
 
-```
+Their output enters ARFA through controlled adapters and remains an observation/signal until it satisfies ARFA's own normalization, verification, evidence, and provenance requirements.
+
+### 8.2 Bidirectional integration
+
+The integration boundary should support bidirectional workflows where useful, including:
+
+```text
 ARFA ↔ Burp Suite
 ARFA ↔ ZAP
 ARFA ↔ Nuclei
-ARFA ↔ other security tools
+ARFA ↔ other specialized tools
 ```
 
-### 5.2 Burp Bridge — Bidirectional
+Potential exchanged objects include:
 
-The Burp integration is bidirectional. What may flow across the boundary includes:
+- targets and scope,
+- requests/responses,
+- traffic,
+- findings,
+- evidence,
+- scan/assessment context.
 
-- Findings
-- Requests / Responses
-- Evidence
-- Targets
-- Scope
-- Scan context
+Exact integration scope is determined during capability intake and implementation phases.
 
-Not all of this flows in the first implementation. The architecture must allow all of it.
+### 8.3 Traffic adapter boundary
 
-### 5.3 Proxy Capability — Future, Not Rejected
+HAR, Burp, mitmproxy/proxy traffic, captured requests, and similar sources should enter through adapters.
 
-Using Burp (or a similar tool) as a proxy is a **future capability**, not a rejected one.
+External traffic formats must not dictate ARFA's core data model.
 
-It is not committed to today, and it is not excluded from the architecture.
+### 8.4 No artificial tool exclusion
 
-### 5.4 No Tool Is Off-Limits
+A tool is not excluded merely because it is powerful or overlaps with ARFA.
 
-ARFA does not exclude integration with any tool merely because that tool is strong.
+The decision is based on:
 
-Each integration is evaluated on its value to ARFA and its cost.
-
-### 5.5 Knowledge Sources (Future)
-
-External datasets and curated knowledge sources are classified as **future knowledge sources**. They are not ingested into the current scanner, the Python AI Engine, or the pipeline.
-
-Classification:
-
-- **HackerOne reports** → future vulnerability knowledge / evidence-derived knowledge
-- **Bug bounty skills / methodologies** → future methodology / skills knowledge
-- **Other datasets** → candidate knowledge sources
-- **Mobile pentest toolkit** → future / mobile capability candidate
-
-Ingestion, indexing, retrieval-augmented generation (RAG), training, and integration with the AI Engine are **explicitly deferred**. No ingestion pipeline is implemented until the Knowledge Layer (see §10.5) enters a future phase.
-
-External knowledge sources serve the future Knowledge Layer. They do not replace evidence, and they do not override provenance. Every finding produced with knowledge-layer assistance remains an ARFA finding with its own provenance (§6).
+- capability value,
+- integration quality,
+- security boundary,
+- provenance,
+- operational cost,
+- maintainability,
+- user workflow.
 
 ---
 
-## 6. Evidence Provenance
+## 9. Traffic, Browser, and Domain Engines
 
-Every finding in ARFA carries **provenance**: a durable record of who produced it, and how.
+These are strategic first-class capabilities, not optional decorations around the original scanner.
 
-Minimum provenance fields:
+### 9.1 Traffic
 
-- Who / what produced the finding (core detector, extension, external tool, AI analyzer).
-- Which extension and version (if applicable).
-- Which detector.
-- Which verification method and result.
-- Which evidence supports the finding.
+The traffic subsystem should support, as the architecture matures:
 
-Provenance is not optional metadata. It is what makes ARFA findings **reproducible, auditable, and defensible**.
+- interception/proxying,
+- HTTPS handling,
+- request/response inspection,
+- traffic history,
+- site/application mapping,
+- repeater workflows,
+- intruder-style controlled iteration,
+- session/auth context,
+- WebSocket/SSE/GraphQL-aware traffic where applicable,
+- traffic-to-finding/evidence linkage,
+- scanner ↔ traffic interoperability.
 
-### Why this matters
+### 9.2 Internal Browser
 
-The ARFA pipeline is:
+The internal browser is an assessment engine, not merely a UI automation helper.
 
+It should eventually support:
+
+- JavaScript execution,
+- SPA discovery,
+- browser-state/session handling,
+- DOM and network observations,
+- dynamic route/API discovery,
+- browser-assisted verification,
+- visual/screenshot evidence where justified,
+- integration with the traffic subsystem.
+
+The browser complements deterministic discovery; it does not invalidate it.
+
+### 9.3 Mobile
+
+Mobile assessment should be a domain-native capability covering appropriate Android/iOS workflows, artifacts, runtime observations, network behavior, and evidence.
+
+The platform should not force mobile semantics into HTTP-only models.
+
+### 9.4 Web3
+
+Web3 assessment should support the relevant layers independently and together:
+
+- smart contracts,
+- ABI/interfaces,
+- transaction behavior,
+- wallets and signing boundaries,
+- dApps,
+- RPC interactions,
+- chain/deployment metadata,
+- authorization and business-logic analysis.
+
+The Web3 engine must retain the same platform-level authorization, evidence, provenance, and verification invariants.
+
+---
+
+## 10. Reconnaissance and Attack-Surface Strategy
+
+ARFA should grow from a target-centric scanner into an attack-surface-aware assessment platform.
+
+Potential asset types include:
+
+- domains,
+- subdomains,
+- IPs,
+- ports,
+- services,
+- certificates,
+- applications,
+- APIs,
+- endpoints,
+- parameters,
+- mobile artifacts,
+- Web3 contracts/deployments,
+- identities/principals.
+
+The asset model should support relationships without forcing a graph database prematurely.
+
+### External attack surface
+
+External reconnaissance may include, within explicit authorization/scope:
+
+- domain discovery,
+- DNS observations,
+- certificate relationships,
+- exposed services,
+- application identification,
+- endpoint/API discovery,
+- technology/framework observations.
+
+Recon findings are observations until they are normalized and, where required, verified.
+
+---
+
+## 11. Readiness, Coverage, and Honest Results
+
+The strategy explicitly separates three questions:
+
+1. **Readiness:** Was the target meaningfully assessable?
+2. **Coverage:** What test obligations were attempted or completed?
+3. **Findings:** What security conclusions were actually verified?
+
+These must not be collapsed into one metric.
+
+For example:
+
+```text
+Transport reachable
+        ≠
+Application assessable
+        ≠
+Full coverage
+        ≠
+No vulnerabilities
 ```
-Detection → Verification → Evidence → Confidence → Finding
-                                                        ↓
-                                Correlation → Attack Chain → Risk → Report
+
+This is essential for reporting and user trust.
+
+A scan that encounters a login barrier, anti-bot challenge, unsupported application behavior, broken session state, or another material limitation must expose that limitation rather than presenting a clean zero-result scan as equivalent to a complete assessment.
+
+---
+
+## 12. Identity, Session, and Secrets Strategy
+
+Authorized identities are a platform capability, not merely detector configuration.
+
+The future identity/session layer should support, where scope permits:
+
+- authorized test-account provisioning,
+- secure credential/secret storage,
+- session lifecycle management,
+- reusable authorized sessions,
+- multiple principals for authorization testing,
+- safe identity references in evidence and findings,
+- rotation, disablement, and deletion.
+
+Secrets must remain behind a dedicated security boundary and must not leak into normal findings, reports, scan history, or evidence.
+
+The platform should integrate identity references with authorization testing and the existing `AuthContext` model rather than replacing domain semantics already established in the core.
+
+---
+
+## 13. OAST and Out-of-Band Strategy
+
+OAST is a distinct verification capability.
+
+The platform should support:
+
+- unique interaction tokens,
+- correlation to originating actions,
+- interaction timestamps,
+- delayed callbacks,
+- expiry,
+- cancellation,
+- isolation between assessments,
+- replay/analysis where appropriate.
+
+An OAST callback is an observation. It becomes security evidence only after the verification layer establishes the relevant relationship to the authorized action and hypothesis.
+
+---
+
+## 14. Race and Stateful Testing Strategy
+
+Race/concurrency testing is an execution pattern rather than a single vulnerability detector.
+
+The platform should eventually support controlled:
+
+- parallel requests,
+- synchronized request release,
+- repeated state transitions,
+- ordering variations,
+- bounded concurrency windows,
+- state comparison and verification.
+
+Race testing must have explicit test intent and state/authorization boundaries. A high request count or budget is not itself sufficient authorization for destructive behavior.
+
+---
+
+## 15. Safety and Authorization Strategy
+
+Authorization is a platform invariant.
+
+Every active execution path — including engines, extensions, browser actions, integrations, plugins, and future agents — must operate inside an explicit assessment policy.
+
+The policy must ultimately cover:
+
+- target scope,
+- allowed protocols/actions,
+- authorization acknowledgement,
+- credentials/identity permissions,
+- destructive-test permissions,
+- egress restrictions,
+- redirect handling,
+- DNS/rebinding considerations,
+- resource/time budgets,
+- cancellation,
+- auditability.
+
+### Destructive operations
+
+A budget does not replace permission.
+
+Potentially destructive/state-changing operations require explicit test intent and appropriate policy approval in addition to ordinary execution limits.
+
+### Agentic execution
+
+An agent must not be able to widen its own scope merely because its reasoning suggests another target or action.
+
+Agent proposals pass through the same policy and execution boundaries as deterministic actions.
+
+---
+
+## 16. Data and Persistence Strategy
+
+The platform should distinguish between different classes of durable data:
+
+### Authoritative operational state
+
+Examples:
+
+- assessments,
+- runs,
+- actions,
+- assets,
+- findings,
+- coverage/test obligations,
+- readiness,
+- identities/references,
+- configuration.
+
+### Evidence and artifacts
+
+Examples:
+
+- request/response evidence,
+- screenshots,
+- captured traffic fragments,
+- OAST interaction records,
+- mobile artifacts,
+- Web3 artifacts.
+
+Evidence should have controlled retention and provenance.
+
+### Derived intelligence
+
+Examples:
+
+- correlations,
+- attack chains,
+- risk calculations,
+- AI analyses,
+- knowledge retrieval results.
+
+Derived intelligence must remain distinguishable from authoritative execution truth.
+
+The initial deployment may remain local-first and simple. Storage technology should evolve when measured requirements justify it rather than because a large product is expected eventually.
+
+---
+
+## 17. Search and Knowledge Strategy
+
+A mature ARFA installation should provide unified search across the information users are authorized to access, potentially including:
+
+- assets,
+- endpoints,
+- traffic,
+- findings,
+- evidence,
+- assessments,
+- identities/references,
+- attack chains,
+- reports,
+- knowledge objects.
+
+### Knowledge layer
+
+Future knowledge capabilities may include:
+
+- security methodologies,
+- vulnerability research,
+- curated advisories,
+- public vulnerability intelligence,
+- internal methodology,
+- reusable investigation patterns,
+- verified lessons from prior assessments.
+
+Knowledge is a reasoning aid, not evidence.
+
+Knowledge retrieval must preserve source provenance and must not silently convert external claims into ARFA findings.
+
+---
+
+## 18. Continuous Assessment Strategy
+
+ARFA should eventually support both bounded assessments and recurring/continuous assessment.
+
+Continuous workflows may include:
+
+- scheduled reconnaissance,
+- change detection,
+- new endpoint discovery,
+- differential security testing,
+- regression checks,
+- re-verification of known findings,
+- attack-surface drift detection.
+
+The same authorization and scope model applies to every recurring execution. A previous authorization does not implicitly authorize a new target or a newly destructive action.
+
+Continuous execution also requires:
+
+- idempotency,
+- recovery,
+- action identity,
+- cancellation,
+- retention policy,
+- auditability,
+- bounded resource consumption.
+
+---
+
+## 19. Reporting and Product Experience Strategy
+
+The UI should be one coherent application with domain-adaptive workspaces rather than a collection of disconnected tools.
+
+The strategic mental model is:
+
+```text
+Targets / Assets
+      ↓
+Assessment / Scope
+      ↓
+Discovery / Mapping
+      ↓
+Traffic / Browser / Domain Engines
+      ↓
+Testing / Verification
+      ↓
+Evidence / Findings
+      ↓
+Correlation / Attack Chains / Risk
+      ↓
+Reports / History / Next Actions
 ```
 
-Without provenance, the pipeline is opaque. With provenance, every stage can be audited independently.
+The platform should expose familiar workflows where they improve usability — such as proxy/history, repeater, intruder-style iteration, site mapping, and dashboards — without making the product a copy of any one existing tool.
 
-This is a core differentiator of ARFA: findings that can be **traced** from report back to detector, verifier, and evidence.
+Reporting should make the following visible:
 
-### Extending provenance
-
-External tools and extensions must be able to **contribute** to provenance, not replace it.
-
-A finding arriving from Burp or from a Java extension still produces an ARFA finding with its own provenance, marked with the external source.
-
----
-
-## 7. Versioning & Compatibility
-
-ARFA versions more than code. It versions contracts.
-
-### Versioned surfaces
-
-- Core API version
-- Extension API version
-- Contract versions (ScanEnvelope, Finding, Evidence, ...)
-- Manifest version
-
-### The Compatibility Rule
-
-> **An extension must not break the core.**
-> **A core change must not break extensions that have not requested it.**
-
-Breaking changes are:
-
-- Versioned (`v2` alongside `v1` where possible)
-- Documented
-- Announced via compatibility metadata
-- Validated by regression tests
-
-### Deprecation
-
-Old versions remain functional until explicitly removed, and removals follow a documented deprecation policy.
+- what was tested,
+- what was not tested,
+- readiness limitations,
+- coverage,
+- findings,
+- evidence,
+- confidence,
+- provenance,
+- tool/engine participation,
+- relevant next actions.
 
 ---
 
-## 8. Learning From Existing Tools
+## 20. Plugin and Extension Security Strategy
 
-ARFA studies the strongest existing tools in the field — including Burp Suite, ZAP, Nuclei, Metasploit, and others — as **sources of capability understanding**, not as competitors to imitate or to dismiss.
+The plugin/extension system is itself an attack surface.
 
-For each capability that another tool has proven valuable, ARFA asks:
+The platform should assume that extensions may contain bugs or may be untrusted.
 
-1. What problem does this capability solve?
-2. Why did this tool's implementation succeed?
-3. Does ARFA need this capability?
-4. If yes, what is the best design for ARFA?
+Required strategic controls include:
 
-ARFA does not:
+- explicit capabilities,
+- permission mediation,
+- resource quotas,
+- network restrictions,
+- filesystem restrictions,
+- secret restrictions,
+- audit logs,
+- version/compatibility checks,
+- revocation/disablement,
+- failure isolation,
+- safe upgrade/removal.
 
-- Copy another tool's implementation.
-- Claim superiority without a benchmark.
-- Reject a capability merely because another tool is strong in it.
-
-ARFA does:
-
-- Take the capability seriously.
-- Design it within ARFA's own architecture.
-- Implement it in its own phase, with its own contracts and tests.
-
-Where ARFA differentiates is **not** in any single capability. It is in the **integration** of capabilities across a single, evidence-backed, provenance-preserving pipeline.
+Signing may improve trust decisions, but signing alone is not a security boundary.
 
 ---
 
-## 9. Scope of Ambition — and Its Limits
+## 21. Baselines, KPIs, and Engineering Evidence
 
-### 9.1 No self-imposed ceiling
+Meaningful platform changes should be measurable when a relevant metric exists.
 
-ARFA does not set a ceiling on itself based on:
+Possible metrics include:
 
-- The capabilities of today's competing tools
-- The size of the current team
-- The state of the current code
+- scan duration,
+- throughput,
+- readiness rate,
+- coverage,
+- verification coverage,
+- false-positive rate,
+- reproducibility,
+- evidence completeness,
+- resource usage,
+- recovery success,
+- integration reliability.
 
-Any capability that could serve ARFA's mission is allowed to enter the architecture and roadmap, regardless of size.
+A metric without a reproducible measurement method is not sufficient evidence for a performance or quality claim.
 
-### 9.2 No self-imposed rush
-
-Planning for a large product does **not** mean implementing everything at once.
-
-> ARFA plans for the large product from the beginning, and implements it incrementally, with strict engineering discipline at every step.
-
-### 9.3 What this does NOT mean
-
-It does **not** mean:
-
-- Building 50 features at once.
-- Abandoning phased execution.
-- Skipping contracts, tests, or reviews.
-- Treating the architecture as a to-do list.
-
-It **does** mean:
-
-- Knowing the destination before laying the next stone.
-- Ensuring today's foundation can host tomorrow's capability without a rewrite.
-- Treating "add a new capability" as a normal event, not a crisis.
+Metrics are selected per capability/phase rather than frozen as one global scorecard.
 
 ---
 
-## 10. Architecture vs Roadmap vs Phase
+## 22. Learning From Existing Security Tools
 
-### 10.1 Architecture
+ARFA should learn from mature security tooling without treating any tool as an architectural template.
 
-Describes the complete product ARFA intends to become. May include capabilities not yet scheduled.
+Useful mental models include:
 
-### 10.2 Roadmap
+- proxy/interception workflows,
+- request history,
+- repeater workflows,
+- intruder-style controlled iteration,
+- site/application mapping,
+- browser-assisted testing,
+- scanner/verifier separation,
+- rich evidence/reporting,
+- extension ecosystems.
 
-Orders the capabilities described in the architecture. Changes over time. Not a commitment to a specific date.
+The goal is not feature imitation.
 
-### 10.3 Phase
-
-The bounded unit of work currently being executed. Has:
-
-- A single scope
-- A feature branch
-- Tests
-- Review
-- A merge point
-- A freeze point
-
-### 10.4 Historical state snapshot
-
-This section records the state at the time this strategy document was
-created. It is not current project status. For the authoritative current
-state, see ARFA_MASTER_CONTEXT.md.
-
-At the time of this document's creation:
-
-- Phase 4 — Technical Debt was in progress.
-- TD #1 was the next candidate.
-- No new phase was open.
-
-> **This section is a snapshot, not a permanent contract.**
-> The authoritative, always-current state of phases, milestones, and technical debt is maintained in `ARFA_MASTER_CONTEXT.md`. If this section and `ARFA_MASTER_CONTEXT.md` disagree, `ARFA_MASTER_CONTEXT.md` wins.
-
-### 10.5 Future capability roadmap
-
-After the current phase closes, capability work proceeds through the intake process described in §15. Candidate capabilities include (but are not limited to):
-
-- Authenticated scanning
-- Out-of-band (OOB) verification
-- JavaScript / browser-based crawling
-- Multi-target orchestration
-- Agentic bounded-loop execution
-- Extension system implementation
-- External tool integrations
-- Web3 scanning
-- Mobile scanning
-- Knowledge / persistence layer
-- **Knowledge Layer (Zetsu)** — a future knowledge and methodology layer providing structured access to security methodologies, skills, vulnerability reports, external datasets, and other curated knowledge sources. Intended to support analysis, correlation, planning, verification, and future agentic decision-making, while preserving provenance and evidence boundaries. Implementation is deferred to a future phase.
-- Dashboard / UI
-- **Extended HTTP capabilities** — multipart / file upload, JSON request bodies, PUT / PATCH / DELETE, cookies / session-aware requests, CSRF handling, GraphQL, WebSocket. Recorded as future candidates; not scheduled, not TDs, and not part of any current phase.
-
-Order is determined by the intake process, not by this document.
+The goal is to understand proven workflows and incorporate them into ARFA's own authorization, execution, evidence, and verification model.
 
 ---
-
-### Additional Future Capability Candidates
-
-The following capabilities are accepted as future roadmap candidates only.
-They are not part of the current Phase 4 implementation and do not reopen
-or modify any closed TD.
-
-- **Detector Coverage Expansion**
-  - Systematic expansion of vulnerability detection beyond the currently
-    implemented detector set.
-  - Candidate areas may include command injection, LDAP injection, NoSQL
-    injection, SSRF, SSTI, open redirect, WebSocket/GraphQL-specific
-    vulnerabilities, and other validated vulnerability classes.
-  - New detectors must preserve the existing deterministic Detection →
-    Verification → Evidence → Finding pipeline, verification semantics,
-    evidence/provenance requirements, coverage tracking, and Go
-    source-of-truth rules.
-  - Exact detector priorities and phase placement will be determined
-    after Phase 4 completion and capability-gap review.
-
-- **Managed / ARFA-Owned Payload Corpus**
-  - Future evaluation of an ARFA-managed, versioned payload corpus in
-    addition to the currently used external corpus.
-  - The goal is broader detector coverage, controlled maintenance,
-    provenance, reproducibility, and predictable release behavior.
-  - This does not replace the existing corpus or alter TD #6 / TD #16.
-  - Corpus ownership, synchronization, packaging, licensing, maintenance,
-    and release strategy must be evaluated before implementation.
-  - No new corpus implementation is part of the current phase.
-
-- **Modern Web / SPA Discovery**
-  - The existing Headless Browser Adapter boundary may be used in a
-    future phase for JavaScript execution, SPA route discovery, dynamic
-    API discovery, DOM observations, and browser-assisted verification.
-  - This supplements the deterministic crawler; it does not replace it.
-  - The capability must preserve authorization/scope, endpoint identity,
-    deterministic core behavior, verification semantics, and
-    evidence/provenance.
-  - Implementation remains deferred to a future phase.
-
-These candidates are intentionally not assigned fixed phase numbers yet.
-Phase ordering will be determined through the Future Capability Intake
-process after the current Phase 4 work is complete and the actual
-capability gaps are re-evaluated.
-
-## 11. Baseline & KPIs
-
-### 11.1 Principle
-
-Every meaningful capability change is preceded by a **baseline measurement** of the affected metric, and followed by a comparison against it.
-
-### 11.2 What this means
-
-- No capability is declared "better" without a benchmark.
-- No claim of "faster" or "more accurate" without a baseline.
-- Numbers stated in strategy or marketing must be reproducible from a run.
-
-### 11.3 Candidate metrics
-
-Metrics are chosen per phase, not fixed globally. Candidates include:
-
-- False positive rate
-- True positive detection rate
-- Scan duration
-- Throughput (URLs per unit time)
-- Maximum practical target size
-- Coverage per vulnerability class
-- Verification coverage
-
-### 11.4 Rule
-
-A metric without a reproducible measurement method is not a metric. It is a wish.
-
----
-
-## 12. Decision Log
-
-Every substantial architectural or strategic decision is recorded — not just made.
-
-### 12.1 What a decision record contains
-
-- Date
-- Decision
-- Reason
-- Alternatives considered
-- Status (accepted / rejected / deferred)
-- Consequences
-
-### 12.2 Where it lives
-
-The decision log lives in `PLATFORM_STRATEGY.md`, under this section. It is part of the strategic reference and is updated when a decision is made, reversed, or materially changed.
-
-### 12.3 Why
-
-- Prevents re-litigating settled questions.
-- Preserves context for future contributors (human and AI).
-- Makes reversals explicit and auditable.
-
-### 12.4 Recorded decisions
-
-**2026-09-14 — Zetsu and external knowledge sources documented**
-
-- **Decision:** Zetsu is documented as a future architectural layer. External datasets (HackerOne reports, bug bounty methodologies, other curated sources) are classified as future knowledge sources.
-- **Reason:** Zetsu is a substantive part of the intended platform, not a passing idea. It belongs in the strategic vision so that future contributors (human and AI) know it has an architectural home.
-- **Alternatives considered:**
-  - Decision Log entry only — rejected. Zetsu is architectural, not merely a decision.
-  - Build Zetsu now — rejected. Violates phase discipline.
-- **Status:** accepted (documentation only; no implementation)
-- **Consequences:**
-  - `PLATFORM_STRATEGY.md` gains an explicit Zetsu entry (§10.5)
-  - `PLATFORM_STRATEGY.md` gains §5.5 Knowledge Sources (Future)
-  - External datasets remain outside the repository, retained as future materials
-  - No ingestion, no RAG, no training, no AI Engine integration
-  - No new phase is opened
-  - Implementation is deferred to a future phase
-
-**2026-09-16 — TD #2 Endpoint Identity & Form Parameter Transport**
-
-- **Decision:**
-  TD #2 establishes first-class GET and POST
-  (`application/x-www-form-urlencoded`) form support within its defined scope,
-  while preserving GET backward compatibility and maintaining an execution
-  boundary that can accommodate future HTTP methods and body types without
-  requiring redesign of the scanner/detector pipeline.
-
-- **Endpoint Identity:**
-  `(URL, Method)` is the Endpoint identity.
-  - Same URL + same Method → one endpoint; parameters are unioned and deduplicated.
-  - Same URL + different Method → separate endpoints.
-
-- **Parameter Transport:**
-  - GET  → `Parameters` → query string
-  - POST → `FormParameters` → `application/x-www-form-urlencoded` body
-
-- **In Scope:**
-  - GET/POST form discovery
-  - Form field extraction (`input` / `textarea` / `select`)
-  - Method-aware request construction
-  - Form field → job/coverage integration
-  - Tests and regression protection
-
-- **Out of Scope (recorded in the Future Capability Roadmap):**
-  - multipart / file upload
-  - JSON request bodies
-  - PUT / PATCH / DELETE
-  - Cookies / session-aware requests
-  - CSRF handling
-  - GraphQL
-  - WebSocket
-
-- **Reason:**
-  GET-only discovery is insufficient for meaningful web VAPT coverage.
-  TD #2 establishes POST form-urlencoded as a first-class capability while
-  keeping the HTTP execution boundary suitable for future extension.
-
-- **Alternatives Considered:**
-  - Minimal implementation (`Do(url, params)` + method-specific conditionals) —
-    rejected as too tightly coupled to the current query-only transport.
-  - Full abstraction (`BodyStrategy`, `JSONBodyStrategy`, etc.) —
-    rejected as premature abstraction.
-  - **Minimal Scope + Professional Foundation** — accepted.
-
-- **Status:**
-  Implemented and **CLOSED / FROZEN** on 2026-09-17 via PR #8.
-
-- **Implementation outcome:**
-  - HTML form discovery supports GET and POST.
-  - Form fields are extracted from `input`, `textarea`, and `select` elements.
-  - Endpoint identity is `(URL, Method)`.
-  - GET parameters use the query string.
-  - POST parameters use `application/x-www-form-urlencoded` request bodies.
-  - Scanner job generation, coverage seeding, and raw probing are method-aware.
-  - Existing GET behavior remains backward-compatible.
-  - No new dependency was introduced.
-
-- **Validation outcome:**
-  - Focused crawler/HTTP-client/scanner tests — PASS
-  - `go test ./...` — PASS
-  - `go test -race ./...` — PASS
-  - `go vet ./...` — PASS
-  - `go build ./...` — PASS
-  - `scripts/run_e2e_regression.sh` — PASS after updating the stale finding-count baseline from 3 to 4
-  - GitHub CI — 2/2 checks PASS
-  - PR #8 — MERGED to `main`
-
-- **Consequences:**
-  - Endpoint map identity is now `(URL, Method)`.
-  - `effectiveParams` is method-aware.
-  - `rawProbe` is method-aware.
-  - `httpclient.Do()` accepts a method-aware request model.
-  - No completed Phase or TD was reopened.
-
-- **Future Capability Roadmap reference:**
-  The "Out of Scope" items above are recorded in
-  `PLATFORM_STRATEGY.md §10.5 — Extended HTTP capabilities`.
-
-TD #2 is now closed/frozen. Future work on multipart, JSON bodies, additional HTTP methods,
-cookies/session context, CSRF, GraphQL, or WebSocket remains outside TD #2 and must enter through
-the normal future-capability intake and phase process.
 
 
 ---
 
-## 13. Non-Goals
+## 23. Cross-Cutting Architectural Coverage
 
-ARFA does not pursue the following, absent a specific reversal recorded in the decision log:
+The strategy must remain aligned with the architecture across the major platform surfaces. The following map is intentional:
 
-1. **Rewriting the core to chase a competitor's feature.** Capabilities are added around the core, not by replacing it.
-2. **Copying another tool's implementation.** Capabilities are understood, not copied.
-3. **Claiming superiority without a benchmark.** Every claim is measurable.
-4. **Opening new phases while the current phase is open.** Phase discipline is non-negotiable.
-5. **Changing the core contract in a phase that did not request it.** Contract changes require explicit approval.
-6. **Implementing future capabilities prematurely.** Architecture allows them; phases schedule them.
-7. **Treating the architecture as a to-do list.** Architecture is direction; phases are work.
+| Architectural area | Strategic position |
+|---|---|
+| Control Plane | Owns policy, scope, assessment lifecycle, budgets, recovery, and governance. |
+| Execution Contract | Every active operation has bounded identity, authorization, inputs, outputs, and outcome semantics. |
+| HTTP / API Engine | Remains a first-class deterministic execution domain and the current foundation is preserved rather than discarded. |
+| Traffic / Interception | Becomes a shared assessment capability connecting browser, scanner, repeater-style workflows, and evidence. |
+| Browser | First-class assessment engine for dynamic applications and browser-state-dependent behavior. |
+| Mobile | Domain-native engine for Android/iOS assessment. |
+| Web3 | Domain-native engine for contracts, dApps, wallets, RPC, and transaction behavior. |
+| OAST | Isolated out-of-band observation/correlation capability feeding verification. |
+| Race / Concurrency | Controlled execution pattern with explicit state and test intent. |
+| External Tools | Adapter boundary; external output is observation/signal until normalized and verified. |
+| Plugins | Capability-based, permission-mediated, resource-bounded, auditable extension boundary. |
+| AI / Knowledge | Intelligence layer that assists analysis without becoming authoritative security truth. |
+| Agentic Workflow | Bounded proposal → policy check → execution → observation → verification loop. |
+| Reporting / UX | One coherent application exposing readiness, coverage, findings, evidence, provenance, and next actions. |
+| Data | Separates authoritative state, evidence/artifacts, and derived intelligence. |
+| Eventing / Jobs | Supports bounded asynchronous work and future scale without making a broker mandatory today. |
+| Search | Evolves toward unified authorized search across assets, traffic, findings, evidence, assessments, and knowledge. |
+| Provenance / Audit | Preserves who/what acted, what happened, and how conclusions were derived. |
+| Deployment | Local-first initially; team/enterprise scale introduced when requirements justify it. |
+| Vulnerability Framework | New classes extend the deterministic detection/verification/evidence path without redesigning the platform core. |
+| Attack Chains / Correlation | Derived from evidence-backed findings and relationships; not an independent source of truth. |
+| Continuous Assessment | Reuses the same authorization, action, recovery, evidence, and audit controls as bounded assessments. |
 
----
-
-## 14. Rules for Claude (and Other AI Assistants)
-
-When Claude or another AI assistant works on ARFA, the following rules apply.
-
-### 14.1 Before any substantial work
-
-1. Read `ARCHITECTURE.md`, `ARFA_MASTER_CONTEXT.md`, and this document.
-2. Read the actual source code relevant to the task.
-3. Confirm the current phase and its scope.
-4. Confirm no other phase is open.
-
-### 14.2 During work
-
-1. Do not modify the Stable Core without explicit approval.
-2. Do not restructure the repository to match a conceptual model in a document.
-3. Do not implement capabilities that are not part of the current phase.
-4. Do not create backups, `.bak` folders, or duplicate project copies. Git is the recovery mechanism.
-5. Do not invent capabilities and claim they exist. If something is not verified in the code, it does not exist.
-
-### 14.3 After work
-
-1. Run all relevant tests.
-2. Report exact commands and results.
-3. Never claim a test passed if it was not run.
-4. Never claim a capability exists if it is not verified in the repository.
-5. Commit only after validation.
-6. Do not merge to `main` without explicit instruction.
-
-### 14.4 When in doubt
-
-Ask. Architectural decisions belong to the human owner, not to the assistant.
+This table is a strategy cross-check, not an implementation checklist. A capability remains unimplemented until the repository and current-state documentation say otherwise.
 
 ---
 
-## 15. Future Capability Intake
+## 24. HTTP/API and Vulnerability-Framework Growth
 
-ARFA will receive new capability ideas continuously — during development, after release, and years into the future. This section defines how such ideas are handled.
+The current HTTP/API scanner remains a foundational execution domain.
 
-### 15.1 The intake process
+Future HTTP/API expansion may include, as justified by the roadmap:
 
+- richer request bodies and encodings,
+- multipart/file upload,
+- cookies and session-aware execution,
+- JSON and structured request manipulation,
+- GraphQL,
+- WebSocket/SSE,
+- gRPC/Protobuf,
+- OAuth/OIDC/JWT-aware workflows,
+- webhook and callback analysis,
+- differential and stateful testing.
+
+These additions must not require replacing the deterministic core.
+
+### Vulnerability framework
+
+The platform must be able to add broad known and emerging vulnerability classes without creating a separate truth model for every detector.
+
+New vulnerability capabilities should plug into the common pattern:
+
+```text
+Discovery / Observation
+        ↓
+Candidate / Test Obligation
+        ↓
+Bounded Execution
+        ↓
+Domain-specific Verification
+        ↓
+Evidence
+        ↓
+Finding
 ```
+
+Domain-specific verification is allowed and often necessary. The authoritative status/evidence boundary remains platform-consistent.
+
+---
+
+## 25. Eventing, Jobs, and Recovery Strategy
+
+Long-running assessments require an explicit job model even when the first implementation remains in-process.
+
+The strategy supports:
+
+- bounded jobs,
+- action identity,
+- idempotent execution where applicable,
+- cancellation,
+- retries with explicit semantics,
+- partial failure representation,
+- recovery after interruption,
+- audit of job/action transitions.
+
+A message broker or distributed workflow engine may become useful later, but the platform must not depend on one before measured requirements justify it.
+
+---
+
+## 26. Attack Chains, Correlation, and Risk
+
+Correlation is a derived intelligence layer over authoritative observations/findings/evidence.
+
+The platform may build relationships such as:
+
+```text
+Asset
+  ↓
+Finding
+  ↓
+Evidence
+  ↓
+Relationship
+  ↓
+Attack Chain
+  ↓
+Risk / Impact Context
+```
+
+An attack chain must remain evidence-backed and traceable to its constituent findings/observations.
+
+AI may propose or explain relationships, but unsupported relationships must remain hypotheses rather than being presented as verified security facts.
+
+---
+
+## 27. External Input and Observation Boundaries
+
+External data must enter through explicit boundaries.
+
+Examples include:
+
+- HAR,
+- Burp/mitmproxy traffic,
+- external scanner output,
+- OAST interaction events,
+- browser observations,
+- mobile artifacts,
+- Web3 metadata,
+- differential-analysis inputs,
+- future knowledge sources.
+
+The strategic rule is:
+
+> **Normalize at the boundary; do not let an external format become an accidental core model.**
+
+External input is untrusted until validated against the relevant schema, scope, provenance, and execution context.
+
+---
+
+## 28. Technology Selection Strategy
+
+The architecture intentionally separates **required capability** from **implementation technology**.
+
+A future component may use Go, Python, Rust, TypeScript, Java/Kotlin, C/C++, a browser sidecar, a process boundary, or another technology when evidence supports the choice.
+
+Technology selection should consider:
+
+- correctness,
+- security isolation,
+- protocol support,
+- performance,
+- concurrency,
+- ecosystem maturity,
+- maintainability,
+- operational complexity,
+- testability,
+- integration cost.
+
+A language or framework must not be selected merely because it is fashionable or because another security tool uses it.
+
+The existing Go/Python foundation remains an asset. Expansion is additive unless a measured requirement justifies otherwise.
+
+---
+
+## 29. Protected Foundation and Controlled Evolution
+
+The existing deterministic scanner foundation contains valuable, verified behavior.
+
+Future work should protect established components unless a scheduled change explicitly requires them.
+
+The strategic rule is:
+
+```text
+Preserve verified behavior
+        ↓
+Extend through stable boundaries
+        ↓
+Change core only when justified
+        ↓
+Version / migrate / test
+```
+
+A conceptual architecture diagram is never a reason to rewrite working code.
+
+When a core change is genuinely required, the change must identify:
+
+- the contract affected,
+- why extension/domain composition is insufficient,
+- compatibility impact,
+- migration strategy,
+- regression coverage,
+- rollback/recovery implications.
+
+---
+
+## 30. Provenance, Auditability, and Governance
+
+A mature platform must be able to answer, after the fact:
+
+- Who initiated the assessment?
+- What scope and authorization applied?
+- Which action executed?
+- Which engine/tool/extension performed it?
+- What was observed?
+- What verification occurred?
+- Which evidence supports the finding?
+- What AI or correlation steps were applied?
+- What was proposed versus actually executed?
+- What failed, was skipped, or remained inconclusive?
+
+Auditability is therefore not only a compliance feature. It is part of the platform's correctness model.
+
+Sensitive material should be represented through safe references and controlled storage rather than copied into every downstream artifact.
+
+
+---
+
+## 31. Capability Intake Process
+
+Every new capability enters through the same strategic intake.
+
+```text
 New capability proposed
         ↓
-Architecture fit?         — Does it belong in ARFA at all?
+1. Mission / architecture fit?
         ↓
-Core change or Extension? — Can it be added without touching the core?
+2. Core, domain engine, adapter, extension, or integration?
         ↓
-Dependencies?             — What does it require from other parts?
+3. Dependencies and prerequisites?
         ↓
-Security / isolation?     — Does it introduce new trust boundaries?
+4. Authorization / scope implications?
         ↓
-Evidence / provenance?    — How does it affect finding traceability?
+5. Security / isolation implications?
         ↓
-Roadmap placement         — Where does it sit in the ordering?
+6. Evidence / provenance / verification impact?
         ↓
-Phase implementation      — When does it actually get built?
+7. Data-model impact?
+        ↓
+8. Operational / recovery / resource implications?
+        ↓
+9. Roadmap placement?
+        ↓
+10. Bounded phase / TD?
 ```
 
-### 15.2 Rules
+### Intake rules
 
-- A capability is not rejected merely because it is large.
-- A capability is not accepted into implementation merely because it is attractive.
-- Every accepted capability enters the architecture first, then the roadmap, then a phase — in that order.
-- **A capability may be added to the architecture without being added to the current phase.**
-- No capability skips the intake process.
-- The output of intake is a decision record (§12).
+- A large capability is not rejected merely because it is large.
+- An attractive capability is not implemented merely because it is attractive.
+- A capability may enter architecture without entering the current roadmap.
+- A roadmap item does not become implementation scope until a phase/TD is approved.
+- No capability bypasses authorization, evidence, verification, or provenance requirements.
+- If a capability requires a core contract change, the change is explicitly reviewed and versioned rather than smuggled into an unrelated phase.
 
-### 15.3 What this achieves
+### Intake decision record
 
-- New ideas are not lost.
-- New ideas are not rushed.
-- The architecture grows steadily, without rewrites.
-- Every contributor — human or AI — knows exactly where a new idea belongs.
+A substantial decision should record:
 
----
+- date,
+- capability/decision,
+- context,
+- alternatives considered,
+- decision,
+- rationale,
+- consequences,
+- compatibility/migration implications,
+- status: accepted / rejected / deferred.
 
-## Authorized Identity & Session Management
-
-ARFA's future platform strategy includes a dedicated capability for managing authorized testing identities and authentication sessions.
-
-The capability is intended to support:
-
-- Provisioning authorized test accounts when the testing scope permits account creation.
-- Secure credential and authentication-secret storage through a dedicated vault boundary.
-- Authentication and session lifecycle management.
-- Reusable authorized identities and sessions across subsequent scans.
-- Multiple principals for IDOR and authorization-boundary testing.
-- Identity-aware evidence, findings, and reporting using safe references rather than raw secrets.
-- Credential lifecycle management including rotation, update, disablement, and deletion.
-
-All identity, account, authentication, and session operations must remain explicitly bounded by the authorized testing scope. Raw credentials and authentication secrets must remain outside findings, reports, scan history, and normal evidence.
-
-This capability is a future platform layer and is not part of the current TD #11 implementation. It will integrate with TD #11's existing `AuthContext` contract rather than replace or redesign it.
-
-For the detailed architectural definition, see `ARCHITECTURE.md — Authorized Identity & Session Management Layer — Future`.
-
-## 16. Source of Truth
-
-When documents disagree, the following order applies:
-
-1. **The actual source code** — what is implemented and verified.
-2. **`ARFA_MASTER_CONTEXT.md`** — current state, closed milestones, active phases.
-3. **`ARCHITECTURE.md`** — complete architectural design.
-4. **`PLATFORM_STRATEGY.md`** (this document) — long-term vision and principles.
-
-Strategy never overrides architecture.
-Architecture never overrides state.
-State never overrides code.
+This prevents settled decisions from being repeatedly re-litigated and makes reversals explicit.
 
 ---
 
-## 17. Closing Principle
+## 32. Versioning and Compatibility Strategy
 
-> **ARFA does not start small. ARFA plans for the product it intends to become, and builds it incrementally with strict engineering discipline.**
+The platform should distinguish between:
 
-Every decision in this document serves that principle:
+### Internal implementation
 
-- The core is stable, so extensions can grow safely.
-- The extension model is defined, so new capabilities have a home.
-- Integration is architectural, so tools are partners, not threats.
-- Provenance is first-class, so findings are defensible.
-- Versioning is disciplined, so the platform does not break as it grows.
-- Intake is defined, so new ideas are neither lost nor rushed.
+May evolve freely within a bounded phase when behavior and contracts remain correct.
 
-This is what it means to design for the scale of tomorrow's product — while building with the discipline of today.
+### Stable contracts
+
+Require compatibility discipline.
+
+Examples:
+
+- `arfa.scan/v1`
+- Finding fields
+- evidence references
+- verification semantics
+- extension API contracts
+- integration schemas.
+
+### Versioning rules
+
+- Prefer additive changes.
+- Preserve existing readers where practical.
+- Version breaking changes explicitly.
+- Provide migration paths for durable data.
+- Deprecate before removal where practical.
+- Never silently reinterpret an old field with a materially different meaning.
+
+---
+
+## 33. Deployment and Scale Strategy
+
+ARFA should evolve from a local-first deployment toward team/enterprise deployment without requiring an architectural rewrite.
+
+### Early posture
+
+- modular monolith / embedded workers where practical,
+- local persistence,
+- explicit boundaries,
+- simple operational dependencies.
+
+### Later posture
+
+Where measured requirements justify it, components may become:
+
+- separate workers,
+- remote execution agents,
+- shared persistence services,
+- dedicated browser/traffic services,
+- queue/event infrastructure,
+- team/enterprise control-plane services.
+
+Technology choices such as brokers, graph databases, analytical stores, or distributed workflow systems are **not strategic requirements by themselves**. They are implementation options evaluated against measured scale and reliability needs.
+
+---
+
+## 34. Rules for AI Implementers
+
+Claude, Codex, Gemini, and other AI implementers operate under the following rules.
+
+### Before work
+
+1. Read the relevant architecture and current-state documents.
+2. Inspect the actual repository code relevant to the task.
+3. Confirm the active phase/TD and its exact scope.
+4. Identify protected/closed areas.
+5. Confirm dependencies and existing contracts before changing them.
+
+### During work
+
+1. Implement the smallest necessary change.
+2. Do not reopen closed work without explicit approval.
+3. Do not reshape the repository merely to match a conceptual diagram.
+4. Do not invent capabilities and report them as implemented.
+5. Do not bypass authorization, verification, evidence, or provenance boundaries.
+6. Do not widen scope because a broader change appears architecturally attractive.
+7. Do not create duplicate backups or parallel project copies; Git is the recovery mechanism.
+
+### After work
+
+1. Run the relevant validation commands.
+2. Report exact commands and results.
+3. Report concerns and unresolved gaps explicitly.
+4. Return a reviewable patch/diff.
+5. Do not claim tests passed if they were not run.
+6. Do not claim a capability exists unless the repository verifies it.
+
+### When architecture and implementation disagree
+
+Stop and surface the discrepancy.
+
+Do not silently modify architecture, rewrite closed behavior, or invent a workaround outside the phase.
+
+Architectural decisions belong to the project owner through the documented decision/phase process.
+
+---
+
+## 35. Strategy Non-Goals
+
+This strategy intentionally does **not**:
+
+- assign fixed implementation dates,
+- assign every future capability to a numbered phase,
+- prescribe one permanent programming language for every subsystem,
+- require distributed infrastructure from day one,
+- require a graph database because the asset model has relationships,
+- require a specific browser technology before implementation evidence exists,
+- require a specific proxy/traffic implementation language before benchmarks,
+- treat AI as an authoritative security oracle,
+- treat external tool output as automatically verified truth,
+- define current repository behavior — that belongs to code and current-state documentation.
+
+---
+
+## 36. Source-of-Truth and Conflict Resolution
+
+When sources disagree:
+
+1. **Actual repository source code** — implemented behavior.
+2. **`ARFA_MASTER_CONTEXT.md`** — current project state and execution roadmap.
+3. **`ARCHITECTURE.md`** — architectural direction and boundaries.
+4. **`PLATFORM_STRATEGY.md`** — long-term platform strategy.
+
+This ordering applies to different questions.
+
+For example:
+
+- If the question is "does this feature exist?" → inspect code.
+- If the question is "what phase is active?" → inspect Master Context.
+- If the question is "where should the platform go architecturally?" → inspect Architecture.
+- If the question is "how should new capabilities be admitted and scaled?" → inspect Strategy.
+
+No strategic statement can override verified implementation facts.
+
+---
+
+## 37. Final Strategy Principle
+
+ARFA should grow without becoming architecturally fragmented.
+
+That means:
+
+- **Broad destination** — no artificial ceiling on useful capability.
+- **Controlled execution** — phases and TDs remain bounded.
+- **One authorization model** — every execution path is constrained.
+- **One truth discipline** — observation is not automatically a finding.
+- **Evidence first** — security conclusions remain defensible.
+- **Domain-native engines** — Web, API, Browser, Mobile, Web3, Traffic, Recon, and OAST can evolve according to their own semantics.
+- **Composable extensions** — new capabilities have a controlled home without forcing rewrites.
+- **Interoperability** — mature external tools can participate through explicit boundaries.
+- **AI with boundaries** — intelligence can assist reasoning without becoming the authority for security truth.
+- **Local-first evolution** — scale is introduced when requirements justify it.
+- **Explicit decisions** — major architectural changes are recorded instead of being rediscovered inside implementation phases.
+
+> **ARFA plans for the complete platform from the beginning, but earns each capability through explicit architecture, bounded implementation, verification, evidence, and review.**
 
 ---
 
 **End of PLATFORM_STRATEGY.md**
-
-## Architectural Boundary Clarification — Future Input & Observation
-
-The future platform direction explicitly treats the following as additive adapter/analysis boundaries:
-
-- **Traffic / Input Adapters:** HAR, Burp, mitmproxy/proxy traffic, and other external request/response sources are normalized at an adapter boundary and must not become core data models.
-- **Observation / Differential Analysis:** baseline and test observations may be compared using status, headers, length, timing, reflection, and behavioral differences. These differences are analysis signals, not findings by themselves.
-- **OOB Interaction Adapter:** external OOB providers may return interaction events correlated to the originating authorized probe before Verification/Evidence. The core does not implement an OOB server.
-- **Headless Browser Adapter:** Playwright/Chromium may provide JavaScript/SPA discovery, DOM observations, and browser-assisted verification as an additional Discovery/Observation capability. It supplements, rather than replaces, the deterministic crawler.
-
-All four boundaries preserve authorization/scope, `(URL, Method)` endpoint identity, existing verification semantics, evidence/provenance, and core independence from any specific external tool or runtime.
-
-These are architectural boundaries only; implementation remains deferred to its appropriate future phase.
