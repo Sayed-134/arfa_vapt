@@ -33,7 +33,8 @@ Use the following hierarchy:
 2. **`ARFA_MASTER_CONTEXT.md`** — authoritative for current project state, closed work, active phase, and operational rules.
 3. **`ARCHITECTURE.md`** — authoritative for long-term architectural direction and boundaries.
 4. **`PLATFORM_STRATEGY.md`** — authoritative for long-term strategy, intake, and ecosystem direction.
-5. Other specifications are subordinate references for their defined scope.
+5. **`PHASE_5_CHARTER.md`** — authoritative for Phase 5 scope and work items.
+6. Other specifications are subordinate references for their defined scope.
 
 If documentation says a capability exists but the repository does not verify it, treat the capability as **not implemented**.
 
@@ -455,9 +456,11 @@ Future vault/identity/traffic/browser capabilities must preserve this boundary.
 
 **Phase 4 is CLOSED / FROZEN.**
 
-**The next implementation phase has not yet been formally opened.**
+**Phase 5 is now the active phase.** Reference: `PHASE_5_CHARTER.md`
 
-The next phase must be derived from the finalized architecture and strategy through capability/dependency analysis. It must not be chosen merely because a particular feature is attractive or familiar.
+**WI-1 has not yet started.** It begins only after Project Owner approval.
+
+The next phase has been selected through capability-gap analysis based on field evidence. It must not be chosen merely because a particular feature is attractive or familiar.
 
 Before implementation begins, define:
 
@@ -471,6 +474,58 @@ Before implementation begins, define:
 8. compatibility impact;
 9. exact phase scope;
 10. validation criteria.
+
+---
+
+## 20A. Phase 5 — Application Visibility Gap (ACTIVE)
+
+Phase 5 is the current active phase.
+
+**Reference:** `PHASE_5_CHARTER.md`
+
+**Problem:** Application Visibility Gap — ARFA reached the application
+and obtained the initial application document, but its current
+discovery path did not materialize the client-side application surface.
+
+**Field Evidence:** `kyc-bounty.amlbot.com`
+
+* Baseline (mode: quick): 1,225 requests, 0 findings
+* Standard (mode: standard): 7,250 requests, 5 XSS findings, all `FALSE_POSITIVE`
+* SPA shell: `<div id="root"></div>` + `/assets/index-B0RLbqBG.js`
+* Bundle inspection: React 18.3.1, Ant Design 5.29.1, React Router v6, Axios 1.13.2
+* Application routes found in the bundle: `/form-a`, `/form-b`, `/generate`
+
+**Root Cause:** Not yet established. WI-1 will determine the exact
+capability boundary.
+
+**Hypotheses (not decisions):**
+
+* JavaScript execution / browser-assisted rendering (leading)
+* Browser state / rendered DOM
+* XHR/fetch or network observation
+* Dynamic API discovery
+* Session/cookie/storage requirements
+* Proxy/traffic requirements
+* uTLS/TLS behavior
+* WAF/challenge detection
+* Other runtime behavior identified during investigation
+
+**Work Items:**
+
+* WI-1 — Exact Capability Boundary Investigation
+* WI-2 — Mature Implementation Research (Reuse → Integrate → Adapt → Build)
+* WI-3 — Minimum Implementation
+
+**Phase 4:** Remains CLOSED / FROZEN.
+
+**WI-1 Start Gate:**
+
+1. `PHASE_5_CHARTER.md` merged into repository — complete (PR #41)
+2. Project Owner approval — pending
+
+**Phase 5 operating principle:**
+
+> Do not build what the evidence has not yet shown ARFA needs.
 
 ---
 
@@ -700,6 +755,12 @@ Defines long-term strategy, capability intake, extension/integration philosophy,
 
 Defines current operational state, closed milestones, implementation contracts, protected foundation, current phase status, and rules for implementation work.
 
+### `PHASE_5_CHARTER.md`
+
+Defines the current active phase (Phase 5) — Application Visibility Gap —
+including WI-1/WI-2/WI-3, scope, completion criteria, evidence boundary,
+and start gate.
+
 ### `PHASE_4_TD_SPECS.md`
 
 Historical/phase-specific reference for Phase 4 technical debt. Closed Phase 4 work is not reopened merely because this document still exists.
@@ -747,6 +808,38 @@ A target can respond successfully while presenting an anti-bot/challenge layer t
 
 ARFA therefore needs first-class readiness/application-accessibility semantics in its future reporting and workflow. This is an architectural requirement, not a justification to bypass a target's defensive controls.
 
+The Phase 5 field evidence demonstrated a concrete **Application
+Visibility Gap**.
+
+ARFA successfully reached the target application and received a real
+HTTP 200 application document containing an SPA shell and a JavaScript
+bundle reference. The current discovery path did not materialize the
+client-side application surface, resulting in only one discovered
+endpoint and fallback-parameter probing despite application routes
+being present in the inspected JavaScript bundle.
+
+The evidence does **not** establish JavaScript execution as the sole
+root cause. JavaScript/browser-assisted rendering is the leading
+hypothesis, while browser state, DOM/rendered state, network
+observation, dynamic API discovery, session/storage requirements,
+proxy/traffic behavior, and other runtime dependencies remain subject
+to WI-1 investigation.
+
+The current evidence does not identify the Cloudflare challenge as
+the cause of this specific SPA-surface visibility gap.
+
+The complete field-evidence package and Phase 5 boundary are
+documented in `PHASE_5_CHARTER.md`.
+
+Phase 5 is the formal response to this field-tested capability gap and
+begins with capability-boundary investigation rather than a
+predetermined implementation technology.
+
+The distinction remains:
+
+**Transport Reachable ≠ Application Assessable ≠ Meaningful Coverage
+≠ No Vulnerabilities**
+
 ---
 
 ## 32. Local Environment Notes
@@ -765,13 +858,27 @@ GUI availability is an environment fact, not proof that the future platform GUI 
 
 ## 33. Current Decision Boundary
 
-The documentation update establishes the architectural destination before selecting the next implementation phase.
+Phase 5 has been selected through capability-gap analysis based on
+field evidence.
 
-The next phase should therefore be chosen only after a capability-gap/dependency review of the finalized three documents and the actual repository.
+Phase 5 is defined in `PHASE_5_CHARTER.md`.
 
-Possible future work must be evaluated against the full platform, including the user workflow and dependency chain, rather than selected as an isolated feature.
+The current phase objective is to determine the exact capability
+boundary required to materialize meaningful client-side application
+surfaces.
 
-No next phase is considered open until its scope is explicitly approved.
+**WI-1 is not started until Project Owner approval.**
+
+No implementation technology is preselected. The first Phase 5
+decision is an investigation decision, not a browser, proxy,
+rendering-engine, or traffic-architecture decision.
+
+Phase 4 remains CLOSED / FROZEN.
+
+Future capabilities such as broader browser automation, full
+proxy/traffic workflows, mobile, Web3, or other platform expansions
+remain outside Phase 5 unless separately justified and explicitly
+opened.
 
 ---
 
